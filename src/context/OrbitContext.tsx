@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   PerfilUsuario, 
   Astronauta, 
@@ -6,7 +6,10 @@ import {
   LogComportamental, 
   ProtocoloRecuperacao,
   NivelAutoavaliacao,
-  StatusOperacional
+  StatusOperacional,
+  TelemetriaPressaoArterial,
+  AnaliseVozIA,
+  ZonaCorporalBiometrica
 } from '../types';
 import { OrbitApiService, calcularFadigaLocalmente } from '../services/api';
 
@@ -24,6 +27,17 @@ interface OrbitContextType {
   delayHouston: string;
   escalaZoom: number;
   setEscalaZoom: (zoom: number) => void;
+  
+  // Telemetria Biométrica Corporal & Pressão no Braço Esquerdo
+  pressaoArterial: TelemetriaPressaoArterial;
+  aferirPressaoArterial: () => Promise<void>;
+  zonasCorporais: ZonaCorporalBiometrica[];
+  
+  // Telemedicina & Análise de Voz por IA
+  analiseVozIA: AnaliseVozIA;
+  iniciarChamadaTelemedicina: () => void;
+  encerrarChamadaTelemedicina: () => void;
+  alternarModoCamera: () => void;
   
   // Ações de astronauta e terminal
   registrarDigitacaoTerminal: (texto: string, backspaces: number, tempoDecorridoMs: number) => void;
@@ -252,6 +266,30 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Astronauta ativo é o Comandante CDR-1 por padrão
   const astronautaAtivo = astronautas[0];
 
+  // Estado da Pressão Arterial do Braço Esquerdo
+  const [pressaoArterial, setPressaoArterial] = useState<TelemetriaPressaoArterial>({
+    sistolica: 118,
+    diastolica: 76,
+    pulsoBpm: 68,
+    status: 'NORMAL',
+    emMedicao: false,
+    alertaParadaObrigatoria: false,
+    timestampUltimaMedicao: 'MET 142:08:15',
+  });
+
+  // Estado da Análise de Voz e Telemedicina IA
+  const [analiseVozIA, setAnaliseVozIA] = useState<AnaliseVozIA>({
+    velocidadeFalaPPM: 138,
+    tomVozHz: 124,
+    jitterAcusticoPercent: 1.1,
+    monotoniaScore: 16,
+    sindromeAstronautaRisco: 12,
+    edemaFacialDetectado: false,
+    diagnosticoClinico: 'Parâmetros vocais e vestibulares em conformidade nominal. Sem sinais de disartria.',
+    emChamada: false,
+    modoCamera: 'SIMULADO',
+  });
+
   // Relógio MET (Mission Elapsed Time)
   useEffect(() => {
     const timer = setInterval(() => {
@@ -288,7 +326,7 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       mensagem,
       detalhe,
     };
-    setLogs((prev) => [novoLog, ...prev.slice(0, 99)]); // mantem os ultimos 100 logs
+    setLogs((prev) => [novoLog, ...prev.slice(0, 99)]);
   }, []);
 
   // Monitorar se servidores externos estão disponíveis sem travar nada
@@ -296,6 +334,184 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     OrbitApiService.sincronizarTarefas(TAREFAS_INICIAIS).then((res) => {
       setIsEdgeMode(res.isEdge);
     });
+  }, []);
+
+  // Mapeamento dinâmico das 6 zonas corporais do astronauta
+  const zonasCorporais: ZonaCorporalBiometrica[] = useMemo(() => {
+    const fadiga = astronautaAtivo.indiceFadiga;
+    const isHipertenso = pressaoArterial.status === 'HIPERTENSAO_CRITICA';
+
+    const getStatusZona = (peso: number): 'NORMAL' | 'ALERTA' | 'CRITICO' => {
+      const valor = fadiga * peso;
+      if (valor >= 68 || isHipertenso) return 'CRITICO';
+      if (valor >= 40) return 'ALERTA';
+      return 'NORMAL';
+    };
+
+    return [
+      {
+        id: 'zona-cabeca',
+        nome: 'Córtex Pré-Frontal & Visor Ocular',
+        regiao: 'CABECA_VISOR',
+        nivelFadiga: getStatusZona(1.1),
+        percentual: Math.min(100, Math.round(fadiga * 1.05)),
+        detalheClinico: fadiga >= 75
+          ? 'Sobrecarga decisória severa. Espasmos sacádicos e micro-lapsos de foco.'
+          : fadiga >= 45
+          ? 'Aumento de tempo de reação em telas de voo.'
+          : 'Acuidade visual e reflexos em parâmetros ideais.',
+      },
+      {
+        id: 'zona-coracao',
+        nome: 'Sistema Cardiovascular & Torácico',
+        regiao: 'CORACAO_TORAX',
+        nivelFadiga: isHipertenso ? 'CRITICO' : getStatusZona(1.0),
+        percentual: Math.min(100, Math.round(isHipertenso ? 92 : fadiga * 0.9)),
+        detalheClinico: isHipertenso
+          ? `HIPERTENSÃO SISTÊMICA (${pressaoArterial.sistolica}/${pressaoArterial.diastolica} mmHg). Risco de arritmia espacial.`
+          : fadiga >= 50
+          ? 'Variabilidade da frequência cardíaca (HRV) reduzida.'
+          : 'Ritmo sinusal regular. Oxigenação sanguínea a 99%.',
+      },
+      {
+        id: 'zona-braco-esq',
+        nome: 'Braço Esquerdo // Manguito de Pressão Arterial',
+        regiao: 'BRACO_ESQUERDO',
+        nivelFadiga: isHipertenso ? 'CRITICO' : pressaoArterial.status === 'ELEVADA' ? 'ALERTA' : 'NORMAL',
+        percentual: Math.min(100, Math.round(pressaoArterial.sistolica / 1.7)),
+        detalheClinico: isHipertenso
+          ? 'PRESSÃO ALTA: Manguito do traje acusa sobrecarga hemodinâmica. PARADA OBRIGATÓRIA.'
+          : `Sensor braquial nominal: ${pressaoArterial.sistolica}/${pressaoArterial.diastolica} mmHg (${pressaoArterial.pulsoBpm} bpm).`,
+      },
+      {
+        id: 'zona-coluna',
+        nome: 'Coluna Cervical & Músculo Trapézio',
+        regiao: 'COLUNA_TRAPEZIO',
+        nivelFadiga: getStatusZona(0.95),
+        percentual: Math.min(100, Math.round(fadiga * 0.95)),
+        detalheClinico: fadiga >= 60
+          ? 'Tensão muscular decorrente da ausência de gravidade (distensão espinhal +3.2cm).'
+          : 'Contratura muscular dentro da margem de conforto.',
+      },
+      {
+        id: 'zona-maos',
+        nome: 'Mãos & Motricidade Fina dos Dedos',
+        regiao: 'MAOS_DEDOS',
+        nivelFadiga: astronautaAtivo.taxaErro > 8 || fadiga >= 70 ? 'CRITICO' : fadiga >= 40 ? 'ALERTA' : 'NORMAL',
+        percentual: Math.min(100, Math.round(astronautaAtivo.taxaErro * 6 + fadiga * 0.4)),
+        detalheClinico: astronautaAtivo.taxaErro > 8
+          ? `Descoordenação neuromuscular fina. Taxa de erros de digitação em ${astronautaAtivo.taxaErro}%.`
+          : 'Cadência motora suficiente para manobras de precisão.',
+      },
+      {
+        id: 'zona-pernas',
+        nome: 'Membros Inferiores & Traje G-Suit',
+        regiao: 'MEMBROS_INFERIORES',
+        nivelFadiga: getStatusZona(0.75),
+        percentual: Math.min(100, Math.round(fadiga * 0.75)),
+        detalheClinico: fadiga >= 65
+          ? 'Deslocamento cefálico de fluidos (Cephalad Fluid Shift) provocando atrofia postural.'
+          : 'Perfusão e pressão capilar nos membros inferiores normais.',
+      },
+    ];
+  }, [astronautaAtivo.indiceFadiga, astronautaAtivo.taxaErro, pressaoArterial]);
+
+  // Aferição Interativa de Pressão Arterial no Braço Esquerdo
+  const aferirPressaoArterial = useCallback(async () => {
+    setPressaoArterial((prev) => ({ ...prev, emMedicao: true }));
+    adicionarLog(
+      'MISSION_EVENT',
+      'INFO',
+      'INFLAÇÃO DO MANGUITO BRAQUIAL ESQUERDO: Aferindo pressão arterial do traje...',
+      'Bomba micro-pneumática de bordo insuflando manguito bio-integrado no braço esquerdo.'
+    );
+
+    // Simulação do ciclo de insuflação e deflação do manguito
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    const isFadigaCritica = astronautaAtivo.indiceFadiga >= 75 || modoContencaoAtivo;
+    const novaSistolica = isFadigaCritica 
+      ? Math.floor(155 + Math.random() * 15) 
+      : Math.floor(115 + Math.random() * 8);
+    const novaDiastolica = isFadigaCritica 
+      ? Math.floor(98 + Math.random() * 10) 
+      : Math.floor(74 + Math.random() * 6);
+    const novoBpm = isFadigaCritica 
+      ? Math.floor(105 + Math.random() * 15) 
+      : Math.floor(66 + Math.random() * 6);
+
+    const isHipertensao = novaSistolica >= 140 || novaDiastolica >= 90;
+    const statusPressao = isHipertensao ? 'HIPERTENSAO_CRITICA' : novaSistolica >= 130 ? 'ELEVADA' : 'NORMAL';
+
+    const now = new Date();
+    const ts = `MET 142:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+
+    setPressaoArterial({
+      sistolica: novaSistolica,
+      diastolica: novaDiastolica,
+      pulsoBpm: novoBpm,
+      status: statusPressao,
+      emMedicao: false,
+      alertaParadaObrigatoria: isHipertensao,
+      timestampUltimaMedicao: ts,
+    });
+
+    if (isHipertensao) {
+      adicionarLog(
+        'OVERRIDE_TRIGGER',
+        'CRITICAL',
+        `ALERTA MÉDICO DE EMERGÊNCIA: HIPERTENSÃO SEVERA DETECTADA NO BRAÇO ESQUERDO (${novaSistolica}/${novaDiastolica} mmHg)`,
+        'PROTOCOLO DE PARADA OPERACIONAL IMEDIATA ATIVADO. Tripulante proibido de manipular propulsão e airlock.'
+      );
+    } else {
+      adicionarLog(
+        'MISSION_EVENT',
+        'SUCCESS',
+        `Medição braquial concluída: ${novaSistolica}/${novaDiastolica} mmHg (${novoBpm} BPM)`,
+        'Pressão arterial dentro dos limites de tolerância para operação de voo.'
+      );
+    }
+  }, [astronautaAtivo.indiceFadiga, modoContencaoAtivo, adicionarLog]);
+
+  // Controles de Vídeo Chamada de Telemedicina Houston
+  const iniciarChamadaTelemedicina = useCallback(() => {
+    setAnaliseVozIA((prev) => ({
+      ...prev,
+      emChamada: true,
+      velocidadeFalaPPM: astronautaAtivo.indiceFadiga >= 75 ? 84 : 136,
+      tomVozHz: astronautaAtivo.indiceFadiga >= 75 ? 98 : 124,
+      jitterAcusticoPercent: astronautaAtivo.indiceFadiga >= 75 ? 7.6 : 1.2,
+      monotoniaScore: astronautaAtivo.indiceFadiga >= 75 ? 82 : 18,
+      sindromeAstronautaRisco: astronautaAtivo.indiceFadiga >= 75 ? 86 : 14,
+      edemaFacialDetectado: astronautaAtivo.indiceFadiga >= 75,
+      diagnosticoClinico: astronautaAtivo.indiceFadiga >= 75
+        ? 'SÍNDROME DE ADAPTAÇÃO ESPACIAL SEVERA (SAS): Disartria detectada, micro-hesitações vocais anormais e apatia acentuada.'
+        : 'Parâmetros vocais e vestibulares em conformidade nominal. Sem sinais de disartria.',
+    }));
+
+    adicionarLog(
+      'UPLINK_PACKET',
+      'WARN',
+      'CANAL DE TELEMEDICINA ABERTO: Consulta médica em tempo real com Houston Flight Surgeon',
+      'IA acústica de bordo inicializada: monitorando velocidade de fala, jitter vocal e Síndrome do Astronauta.'
+    );
+  }, [astronautaAtivo.indiceFadiga, adicionarLog]);
+
+  const encerrarChamadaTelemedicina = useCallback(() => {
+    setAnaliseVozIA((prev) => ({ ...prev, emChamada: false }));
+    adicionarLog(
+      'MISSION_EVENT',
+      'INFO',
+      'Canal de telemedicina encerrado pelo cirurgião de voo.',
+      'Relatório de análise de voz salvo no prontuário do Core Sync.'
+    );
+  }, [adicionarLog]);
+
+  const alternarModoCamera = useCallback(() => {
+    setAnaliseVozIA((prev) => ({
+      ...prev,
+      modoCamera: prev.modoCamera === 'SIMULADO' ? 'WEBCAM' : 'SIMULADO',
+    }));
   }, []);
 
   // Avaliação contínua da fadiga do astronauta ativo
@@ -342,6 +558,15 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Se ultrapassou o limiar crítico, engaja modo de contenção autônomo
     if (isCritico && !modoContencaoAtivo) {
       setModoContencaoAtivo(true);
+      setPressaoArterial((prev) => ({
+        ...prev,
+        sistolica: 162,
+        diastolica: 104,
+        pulsoBpm: 112,
+        status: 'HIPERTENSAO_CRITICA',
+        alertaParadaObrigatoria: true,
+      }));
+
       adicionarLog(
         'OVERRIDE_TRIGGER',
         'CRITICAL',
@@ -357,14 +582,13 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               ...t,
               status: 'ADIADA_POR_FADIGA',
               adiadaAutomaticamente: true,
-              motivoAdiantamento: 'Sobrecarga cognitiva detectada por análise comportamental (Sensorless Engine).',
+              motivoAdiantamento: 'Sobrecarga cognitiva e hemodinâmica detectada por análise comportamental.',
             };
           }
           return t;
         })
       );
     } else if (!isCritico && modoContencaoAtivo) {
-      // Retorno ao modo nominal
       setModoContencaoAtivo(false);
     }
   }, [tarefas, modoContencaoAtivo, adicionarLog]);
@@ -504,11 +728,11 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (a.id === 'ast-01') {
           return {
             ...a,
-            indiceFadiga: 84,
-            wpm: 26,
+            indiceFadiga: 86,
+            wpm: 24,
             taxaErro: 14.8,
-            latenciaTeclaMs: 380,
-            horasVigilia: 18.5,
+            latenciaTeclaMs: 390,
+            horasVigilia: 19.0,
             autoavaliacao: 'OTIMO', // Discrepância de Omissão!
             statusOperacional: 'BLOQUEIO_AUTONOMO',
           };
@@ -517,6 +741,27 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })
     );
 
+    setPressaoArterial({
+      sistolica: 165,
+      diastolica: 106,
+      pulsoBpm: 118,
+      status: 'HIPERTENSAO_CRITICA',
+      emMedicao: false,
+      alertaParadaObrigatoria: true,
+      timestampUltimaMedicao: 'MET 142:08:44 (ALERTA)',
+    });
+
+    setAnaliseVozIA((prev) => ({
+      ...prev,
+      velocidadeFalaPPM: 78,
+      tomVozHz: 92,
+      jitterAcusticoPercent: 8.4,
+      monotoniaScore: 88,
+      sindromeAstronautaRisco: 91,
+      edemaFacialDetectado: true,
+      diagnosticoClinico: 'SÍNDROME DE ADAPTAÇÃO ESPACIAL GRAVE (SAS): Fala bradilálica, exaustão psicomotora e hipertensão no manguito esquerdo.',
+    }));
+
     setTarefas((prev) =>
       prev.map((t) => {
         if (t.criticidade === 'CRITICA' && t.responsavelId === 'ast-01') {
@@ -524,7 +769,7 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ...t,
             status: 'ADIADA_POR_FADIGA',
             adiadaAutomaticamente: true,
-            motivoAdiantamento: 'Fadiga cognitiva extrema (>84%). Risco de catástrofe operacional em RCS / Airlock.',
+            motivoAdiantamento: 'Fadiga extrema (>86%) e Hipertensão no Braço Esquerdo (165/106 mmHg). Risco severo.',
           };
         }
         return t;
@@ -534,8 +779,8 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     adicionarLog(
       'OVERRIDE_TRIGGER',
       'CRITICAL',
-      'SIMULAÇÃO ATIVADA: ANOMALIA DE FADIGA CRÍTICA DISPARADA (84%)',
-      'WPM caiu para 26 com 14.8% de erro. Tripulante declarou "Ótimo" -> FATOR OMISSÃO CONFIRMADO. Nave assume cabine.'
+      'SIMULAÇÃO ATIVADA: ANOMALIA DE FADIGA CRÍTICA DISPARADA (86%) COM HIPERTENSÃO SEVERA',
+      'Braço esquerdo indicou 165/106 mmHg. Fala caiu para 78 PPM. Bloqueio operacional compulsório ativado.'
     );
   }, [adicionarLog]);
 
@@ -545,6 +790,28 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setAstronautas(DADOS_INICIAIS_ASTRONAUTAS);
     setTarefas(TAREFAS_INICIAIS);
     setProtocolos(PROTOCOLOS_INICIAIS);
+
+    setPressaoArterial({
+      sistolica: 118,
+      diastolica: 76,
+      pulsoBpm: 68,
+      status: 'NORMAL',
+      emMedicao: false,
+      alertaParadaObrigatoria: false,
+      timestampUltimaMedicao: 'MET 142:08:15',
+    });
+
+    setAnaliseVozIA({
+      velocidadeFalaPPM: 138,
+      tomVozHz: 124,
+      jitterAcusticoPercent: 1.1,
+      monotoniaScore: 16,
+      sindromeAstronautaRisco: 12,
+      edemaFacialDetectado: false,
+      diagnosticoClinico: 'Parâmetros vocais e vestibulares em conformidade nominal. Sem sinais de disartria.',
+      emChamada: false,
+      modoCamera: 'SIMULADO',
+    });
 
     adicionarLog(
       'MISSION_EVENT',
@@ -570,6 +837,13 @@ export const OrbitProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         delayHouston,
         escalaZoom,
         setEscalaZoom,
+        pressaoArterial,
+        aferirPressaoArterial,
+        zonasCorporais,
+        analiseVozIA,
+        iniciarChamadaTelemedicina,
+        encerrarChamadaTelemedicina,
+        alternarModoCamera,
         registrarDigitacaoTerminal,
         atualizarAutoavaliacao,
         completarTarefa,

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useOrbit } from '../context/OrbitContext';
+import { AstronautBodyScanner } from './AstronautBodyScanner';
+import { TelemedicineVideoFeed } from './TelemedicineVideoFeed';
 import { 
   HeartPulse, 
   Radio, 
@@ -10,8 +12,12 @@ import {
   Activity, 
   Clock, 
   TrendingUp, 
-  FileText,
-  Zap
+  FileText, 
+  Zap, 
+  Video, 
+  Rotate3d,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 export const MedicalView: React.FC = () => {
@@ -20,11 +26,17 @@ export const MedicalView: React.FC = () => {
     protocolos, 
     transmitirProtocolo, 
     delayHouston, 
-    modoContencaoAtivo 
+    modoContencaoAtivo,
+    pressaoArterial,
+    analiseVozIA 
   } = useOrbit();
 
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [transmittingId, setTransmittingId] = useState<string | null>(null);
+
+  // Visibilidade das Seções Clínicas na Dashboard Médica
+  const [mostrarScannerMedico, setMostrarScannerMedico] = useState(true);
+  const [mostrarTelemedicinaMedica, setMostrarTelemedicinaMedica] = useState(true);
 
   const historico = astronautaAtivo.historicoDias;
 
@@ -49,8 +61,10 @@ export const MedicalView: React.FC = () => {
   // Subjective Self-Report points
   const pointsSubj = historico.map((h, i) => `${getX(i)},${getY(h.autoAvaliacaoNum)}`).join(' ');
 
+  const isHipertenso = pressaoArterial.status === 'HIPERTENSAO_CRITICA';
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Flight Surgeon Header & Deep-Space Delay Badge */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-2.5 text-xs md:text-sm font-mono">
         <div className="flex items-center gap-2">
@@ -96,6 +110,23 @@ export const MedicalView: React.FC = () => {
           </div>
         </div>
 
+        <div className={`border p-4 transition-colors ${
+          isHipertenso ? 'bg-[#251C30] border-[#EF4444]' : 'bg-[#0F253E] border-[#1E3A5F]'
+        }`}>
+          <div className="text-xs text-[#8892B0] mb-1.5 flex items-center justify-between font-semibold">
+            <span>PRESSÃO DO BRAÇO ESQUERDO</span>
+            <HeartPulse className={`w-4 h-4 ${isHipertenso ? 'text-[#EF4444]' : 'text-[#F59E0B]'}`} />
+          </div>
+          <div className={`text-3xl font-bold leading-tight ${isHipertenso ? 'text-[#EF4444] animate-pulse' : 'text-white'}`}>
+            {pressaoArterial.sistolica}/{pressaoArterial.diastolica}
+          </div>
+          <div className="text-xs mt-1.5">
+            <span className={isHipertenso ? 'text-[#EF4444] font-bold' : 'text-[#10B981]'}>
+              {isHipertenso ? 'HIPERTENSÃO SEVERA' : 'Tensão sob controle'}
+            </span>
+          </div>
+        </div>
+
         <div className="bg-[#0F253E] border border-[#1E3A5F] p-4">
           <div className="text-xs text-[#8892B0] mb-1.5 flex items-center justify-between font-semibold">
             <span>AUDITORIA "FATOR OMISSÃO"</span>
@@ -110,22 +141,59 @@ export const MedicalView: React.FC = () => {
               : 'Último desvio em SOL 140'}
           </div>
         </div>
-
-        <div className="bg-[#0F253E] border border-[#1E3A5F] p-4">
-          <div className="text-xs text-[#8892B0] mb-1.5 flex items-center justify-between font-semibold">
-            <span>MODO DE TRANSMISSÃO MÉDICA</span>
-            <Radio className="w-4 h-4 text-[#10B981]" />
-          </div>
-          <div className="text-3xl font-bold text-[#10B981] leading-tight">
-            UPLINK DSN
-          </div>
-          <div className="text-xs text-[#8892B0] mt-1.5">
-            Rede: Deep Space Goldstone
-          </div>
-        </div>
       </div>
 
-      {/* Main Split: Longitudinal Comparative Chart vs Clinical Inconsistency Audit */}
+      {/* 🚀 DESTAQUE 1 NA DASHBOARD MÉDICA: SCANNER 3D DO ASTRONAUTA EM FATO ESPACIAL & BRAÇO ESQUERDO */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-2 font-mono text-xs md:text-sm">
+          <div className="flex items-center gap-2">
+            <Rotate3d className="w-4 h-4 text-[#38BDF8]" />
+            <span className="text-white font-bold tracking-wider">
+              INSPEÇÃO BIOMECÂNICA 3D // FATO ESPACIAL & MANGUITO BRAQUIAL
+            </span>
+            <span className="text-xs text-[#8892B0] hidden md:inline">
+              (Avaliação de zonas corporais em rotação contínua de 360°)
+            </span>
+          </div>
+          <button
+            onClick={() => setMostrarScannerMedico(!mostrarScannerMedico)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#060F1E] border border-[#1E3A5F] text-[#8892B0] hover:text-white text-xs font-bold"
+          >
+            {mostrarScannerMedico ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <span>{mostrarScannerMedico ? 'RECOLHER SCANNER' : 'EXPANDIR SCANNER 3D'}</span>
+          </button>
+        </div>
+
+        {mostrarScannerMedico && <AstronautBodyScanner />}
+      </div>
+
+      {/* 🚀 DESTAQUE 2 NA DASHBOARD MÉDICA: CÂMARA DE TELECONSULTA HOUSTON & IA DE VOZ */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-2 font-mono text-xs md:text-sm">
+          <div className="flex items-center gap-2">
+            <Video className="w-4 h-4 text-[#38BDF8]" />
+            <span className="text-white font-bold tracking-wider">
+              TELECONSULTA CLÍNICA HOUSTON ⟷ NAVE // ANÁLISE DE VOZ & SÍNDROME DO ASTRONAUTA
+            </span>
+            {analiseVozIA.emChamada && (
+              <span className="text-xs px-2 py-0.5 bg-[#EF4444] text-white font-bold animate-pulse">
+                CANAL ABERTO
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setMostrarTelemedicinaMedica(!mostrarTelemedicinaMedica)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#060F1E] border border-[#1E3A5F] text-[#8892B0] hover:text-white text-xs font-bold"
+          >
+            {mostrarTelemedicinaMedica ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <span>{mostrarTelemedicinaMedica ? 'RECOLHER TELEMEDICINA' : 'EXPANDIR CÂMARA'}</span>
+          </button>
+        </div>
+
+        {mostrarTelemedicinaMedica && <TelemedicineVideoFeed />}
+      </div>
+
+      {/* Seção Longitudinal: Gráfico Vetorial Comparativo & Inconsistências de Houston */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left (7 cols): High-Precision SVG Telemetry Chart */}
         <div className="lg:col-span-7 bg-[#0F253E] border border-[#1E3A5F] p-4 md:p-5">

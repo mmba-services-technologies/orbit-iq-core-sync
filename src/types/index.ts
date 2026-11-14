@@ -25,6 +25,37 @@ export interface PontoHistoricoClinico {
   nota?: string;
 }
 
+export interface TelemetriaPressaoArterial {
+  sistolica: number;
+  diastolica: number;
+  pulsoBpm: number;
+  status: 'NORMAL' | 'ELEVADA' | 'HIPERTENSAO_CRITICA';
+  emMedicao: boolean;
+  alertaParadaObrigatoria: boolean;
+  timestampUltimaMedicao: string;
+}
+
+export interface AnaliseVozIA {
+  velocidadeFalaPPM: number; // Palavras por minuto na fala
+  tomVozHz: number; // Pitch acústico médio
+  jitterAcusticoPercent: number; // Micro-tremores de estresse vocal
+  monotoniaScore: number; // Indicador de exaustão neuromotora (0-100)
+  sindromeAstronautaRisco: number; // Risco de Síndrome do Astronauta / SAS (0-100%)
+  edemaFacialDetectado: boolean; // Deslocamento de fluidos corporais para a cabeça
+  diagnosticoClinico: string;
+  emChamada: boolean;
+  modoCamera: 'SIMULADO' | 'WEBCAM';
+}
+
+export interface ZonaCorporalBiometrica {
+  id: string;
+  nome: string;
+  regiao: 'CABECA_VISOR' | 'CORACAO_TORAX' | 'BRACO_ESQUERDO' | 'COLUNA_TRAPEZIO' | 'MAOS_DEDOS' | 'MEMBROS_INFERIORES';
+  nivelFadiga: 'NORMAL' | 'ALERTA' | 'CRITICO';
+  percentual: number;
+  detalheClinico: string;
+}
+
 export interface Astronauta {
   id: string;
   nome: string;

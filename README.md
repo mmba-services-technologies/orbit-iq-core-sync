@@ -41,13 +41,19 @@ No topo da aplicação, o seletor rápido **VIEWPORT MODE** permite alternar ins
 
 ### 1. 🧑‍🚀 Perfil 1: Astronauta a Bordo (`ONBOARD CREW - REAL TIME`)
 - **Foco:** Execução operacional e proteção autônoma imediata (0ms de latência local).
-- **Terminal de Comando Interativo:** Área onde o tripulante digita relatórios de bordo e rotinas técnicas. O sistema captura cada pressionamento de tecla, calculando dinamicamente:
-  - **WPM Real** (Palavras por minuto);
-  - **Taxa de Erro Mecânico / Backspaces** (descoordenação motora fina);
-  - **Latência Tecla a Tecla (ms)**.
+- **Scanner Anatômico 3D do Astronauta em Fato Espacial:**
+  - Modelo tridimensional em rotação contínua de 360° com traje EVA/IVA completo (capacete com visor espelhado, juntas biomecânicas, botas pressurizadas e mochila de suporte de vida PLSS).
+  - Mapeamento dinâmico de cores por zona: **Verde** (Nominal), **Amarelo** (Fadiga moderada) e **Vermelho** (Fadiga Crítica - Parar Urgente!).
+  - **Medidor de Tensão Arterial no Braço Esquerdo:** Manguito braquial integrado no traje espacial com aferição em tempo real (`118/76 mmHg` nominal vs `165/106 mmHg` em crise hipertensiva). Se for detectada hipertensão, a aplicação emite o alarme **`ALERTA MÉDICO DE HIPERTENSÃO SEVERA: PARADA OPERACIONAL IMEDIATA`** e bloqueia tarefas manuais.
+- **Canal de Telemedicina Houston & IA de Voz em Tempo Real:**
+  - Videochamada criptografada de bordo com a equipa médica na Terra (comutação entre simulação de cabine orbital e webcam real do usuário).
+  - Enquanto a chamada ocorre, um motor de IA analisa ao vivo:
+    - **Velocidade de Fala (PPM):** Detecção de bradilalia e lentidão articulatória decorrente de exaustão.
+    - **Tom de Voz & Jitter Acústico (%):** Osciloscópio espectral de áudio, micro-tremores de estresse vocal e monotonia depressiva.
+    - **Síndrome do Astronauta (Space Adaptation Syndrome - SAS):** Probabilidade de risco, desorientação vestibular e edema facial por redistribuição cefálica de fluidos.
+- **Terminal de Comando Interativo:** Área onde o tripulante digita relatórios de bordo e rotinas técnicas. O sistema captura cada pressionamento de tecla, calculando dinamicamente WPM, erros e latência.
 - **Micro-Check-in Subjetivo de 30s:** Botões rápidos (`ÓTIMO`, `NEUTRO`, `EXAUSTO`).
-- **Lista de Tarefas em Curso:** Exibe status, módulo e tempo estimado. Se a nave engajar o modo de contenção, tarefas críticas (como propulsão RCS ou manuseio de válvulas do Airlock) são **automaticamente bloqueadas e adiadas**, sinalizando a intervenção ao tripulante.
-- **Atuadores de Cabine:** Feedback em tempo real do espectro de luz (6500K luz solar vs. 2700K corte azul de 480nm) e travas de segurança de propulsão.
+- **Lista de Tarefas em Curso:** Exibe status, módulo e tempo estimado com travas autônomas.
 
 ### 2. 🩺 Perfil 2: Equipa Médica na Terra (`FLIGHT SURGEON / MEDICAL - HOUSTON`)
 - **Foco:** Análise clínica longitudinal, auditoria do "Fator Omissão" e sincronização com retardo orbital.
@@ -143,11 +149,18 @@ npm run build
 ## 🎙️ Roteiro Sugerido de Demonstração para os Jurados (Pitch de 3 Minutos)
 
 1. **Introdução (30s):** Abra no **Perfil 1 (`ONBOARD CREW`)**. Aponte para o selo `SENSORLESS HYBRID ENGINE` e explique que o sistema monitora o cansaço do astronauta sem relógios desconfortáveis ou câmeras de vigilância.
-2. **Interação ao Vivo (45s):** Clique em um dos modelos rápidos de texto ou digite diretamente no terminal operacional. Mostre as métricas de WPM, taxa de erro e latência oscilando em tempo real.
-3. **Disparando a Anomalia (30s):** Clique no botão do cabeçalho **`FORÇAR ANOMALIA / FADIGA`**.
-   - Aponte a transição imediata para o modo de alerta: a paleta de cores muda para âmbar/vermelho;
-   - Mostre a notificação no banner superior indicando que a nave reduziu o espectro de luz azul para 2700K;
-   - Mostre que a tarefa crítica do **Airlock Quest foi automaticamente bloqueada** pelo computador de bordo para evitar acidentes.
+2. **Scanner Anatômico 3D & Braço Esquerdo (45s):** 
+   - Aponte para o modelo do astronauta em seu fato espacial girando em 360°.
+   - Mostre o **Manguito de Pressão no Braço Esquerdo** medindo a tensão arterial em tempo real e as zonas coloridas (Verde = Nominal, Amarelo = Alerta, Vermelho = Parar Urgente).
+   - Clique em **`AFERIR PRESSÃO AGORA`** para demonstrar a insuflação pneumática de 3s.
+3. **Telemedicina ao Vivo & IA de Voz (30s):**
+   - Clique na aba **`2. CONSULTA ONLINE AO VIVO & IA DE VOZ`** (ou conecte a chamada).
+   - Mostre o osciloscópio de áudio em tempo real e os 3 indicadores da IA: Velocidade de fala (PPM), Jitter vocal (tremores) e risco da **Síndrome do Astronauta (SAS)**.
+4. **Disparando a Anomalia (30s):** Clique no botão do cabeçalho **`FORÇAR ANOMALIA / FADIGA`**.
+   - O corpo do astronauta no scanner entra em alerta vermelho;
+   - O manguito do braço esquerdo dispara para **165/106 mmHg**, acionando o alarme: **`ALERTA MÉDICO DE HIPERTENSÃO SEVERA: PARADA OPERACIONAL IMEDIATA`**;
+   - A IA de voz detecta bradilalia (fala lenta a 78 PPM) e risco de 91% na Síndrome do Astronauta;
+   - A nave assume o controle da cabine e trava as tarefas críticas.
 4. **Visão da Equipe Médica (30s):** Mude para a aba **`2. EQUIPA MÉDICA`**. Destaque o selo de atraso de `-18m 42s` e o gráfico comparativo SVG apontando a bandeira de **"FATOR OMISSÃO"** (quando o astronauta disse estar bem, mas a digitação provou o contrário). Clique no botão **`TRANSMITIR`** de um dos protocolos de Houston.
 5. **Visão de Coordenação (30s):** Mude para a aba **`3. COORDENAÇÃO DE MISSÃO`**. Mostre a matriz consolidada da tripulação, o log da tarefa que foi adiada pela IA a bordo e clique em **`APROVAR NOVO HORÁRIO (14:00)`** para reorganizar a linha do tempo orbital.
 6. **Conclusão (15s):** Aponte para o rodapé destacando o `ENGINE MODE: LOCAL EDGE SYNC ACTIVE`, reforçando que o sistema é 100% autônomo, seguro contra desconexões e pronto para missões em Marte.

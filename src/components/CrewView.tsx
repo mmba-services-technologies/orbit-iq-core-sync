@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useOrbit } from '../context/OrbitContext';
 import { NivelAutoavaliacao, TarefaMissao } from '../types';
+import { AstronautBodyScanner } from './AstronautBodyScanner';
+import { TelemedicineVideoFeed } from './TelemedicineVideoFeed';
 import { 
   Terminal, 
   AlertOctagon, 
@@ -14,7 +16,12 @@ import {
   Eye, 
   Sliders, 
   Zap,
-  Info
+  Info,
+  Video,
+  Heart,
+  Rotate3d,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 export const CrewView: React.FC = () => {
@@ -22,6 +29,8 @@ export const CrewView: React.FC = () => {
     astronautaAtivo, 
     tarefas, 
     modoContencaoAtivo, 
+    pressaoArterial,
+    analiseVozIA,
     registrarDigitacaoTerminal, 
     atualizarAutoavaliacao, 
     completarTarefa,
@@ -33,6 +42,10 @@ export const CrewView: React.FC = () => {
   const [backspaceCount, setBackspaceCount] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Controle de Visualização Integrada
+  const [mostrarScanner, setMostrarScanner] = useState(true);
+  const [mostrarTelemedicina, setMostrarTelemedicina] = useState(true);
 
   // Quick preset astronaut log templates for quick pitch presentation
   const templates = [
@@ -99,8 +112,10 @@ export const CrewView: React.FC = () => {
     return 'bg-[#0099FF]';
   };
 
+  const isHipertenso = pressaoArterial.status === 'HIPERTENSAO_CRITICA';
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Flight Deck Header Info */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-2.5 text-xs md:text-sm font-mono">
         <div className="flex items-center gap-2">
@@ -251,47 +266,97 @@ export const CrewView: React.FC = () => {
           )}
         </div>
 
-        {/* Metric 4: Cabin Environment & Autonomous Actuators */}
+        {/* Metric 4: Manguito do Braço Esquerdo & Cabine */}
         <div className={`p-4 border transition-colors ${
-          modoContencaoAtivo ? 'bg-[#251C30] border-[#F59E0B]' : 'bg-[#0F253E] border-[#1E3A5F]'
+          isHipertenso ? 'bg-[#251C30] border-[#EF4444]' : 'bg-[#0F253E] border-[#1E3A5F]'
         }`}>
           <div className="flex items-center justify-between text-xs md:text-sm font-mono text-[#8892B0] mb-1.5">
             <span className="flex items-center gap-1.5 font-bold tracking-wider">
-              <Sliders className="w-4 h-4 text-[#38BDF8]" />
-              ATUADORES DE CABINE
+              <Heart className={`w-4 h-4 ${isHipertenso ? 'text-[#EF4444]' : 'text-[#38BDF8]'}`} />
+              BRAÇO ESQUERDO // PRESSÃO
             </span>
             <span className={`text-xs px-1.5 py-0.5 font-mono font-bold ${
-              modoContencaoAtivo ? 'bg-[#F59E0B] text-black' : 'bg-[#1E3A5F] text-[#38BDF8]'
+              isHipertenso ? 'bg-[#EF4444] text-white' : 'bg-[#1E3A5F] text-[#38BDF8]'
             }`}>
-              {modoContencaoAtivo ? 'CONTENÇÃO' : 'NOMINAL'}
+              {isHipertenso ? 'HIPERTENSÃO' : 'NOMINAL'}
             </span>
           </div>
 
           <div className="space-y-2 mt-2 font-mono text-xs md:text-sm">
             <div className="flex justify-between items-center bg-[#060F1E] px-2.5 py-1.5 border border-[#1E3A5F]">
-              <span className="text-[#8892B0] text-xs">ESPECTRO LUZ:</span>
-              <span className={`font-bold ${modoContencaoAtivo ? 'text-[#F59E0B]' : 'text-white'}`}>
-                {modoContencaoAtivo ? '2700K (480nm CUT)' : '6500K (DAYLIGHT)'}
+              <span className="text-[#8892B0] text-xs">MANGUITO ESQUERDO:</span>
+              <span className={`font-bold ${isHipertenso ? 'text-[#EF4444] text-sm animate-pulse' : 'text-white'}`}>
+                {pressaoArterial.sistolica}/{pressaoArterial.diastolica} mmHg
               </span>
             </div>
             <div className="flex justify-between items-center bg-[#060F1E] px-2.5 py-1.5 border border-[#1E3A5F]">
-              <span className="text-[#8892B0] text-xs">TRAVA CRÍTICA:</span>
-              <span className={`font-bold flex items-center gap-1.5 ${
-                modoContencaoAtivo ? 'text-[#EF4444]' : 'text-[#10B981]'
+              <span className="text-[#8892B0] text-xs">ESTADO DO TRAJE:</span>
+              <span className={`font-bold flex items-center gap-1 ${
+                isHipertenso ? 'text-[#EF4444]' : 'text-[#10B981]'
               }`}>
-                {modoContencaoAtivo ? (
+                {isHipertenso ? (
                   <>
-                    <Lock className="w-3.5 h-3.5" /> ATIVA (PROPULSÃO)
+                    <Lock className="w-3.5 h-3.5" /> BLOQUEIO ATIVO
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-3.5 h-3.5" /> LIBERADA
+                    <ShieldCheck className="w-3.5 h-3.5" /> NOMINAL (68 BPM)
                   </>
                 )}
               </span>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* 🚀 DESTAQUE 1: SCANNER 3D DO ASTRONAUTA EM FATO ESPACIAL & MEDIDOR NO BRAÇO ESQUERDO */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-2 font-mono text-xs md:text-sm">
+          <div className="flex items-center gap-2">
+            <Rotate3d className="w-4 h-4 text-[#38BDF8]" />
+            <span className="text-white font-bold tracking-wider">
+              1. MODELO CORPORAL 3D // FATO DE ASTRONAUTA & MEDIDOR DE TENSÃO
+            </span>
+            <span className="text-xs text-[#8892B0] hidden md:inline">
+              (Gira 360° mostrando zonas em Verde, Amarelo e Vermelho)
+            </span>
+          </div>
+          <button
+            onClick={() => setMostrarScanner(!mostrarScanner)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#060F1E] border border-[#1E3A5F] text-[#8892B0] hover:text-white text-xs font-bold"
+          >
+            {mostrarScanner ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <span>{mostrarScanner ? 'RECOLHER SCANNER' : 'EXPANDIR SCANNER 3D'}</span>
+          </button>
+        </div>
+
+        {mostrarScanner && <AstronautBodyScanner />}
+      </div>
+
+      {/* 🚀 DESTAQUE 2: CÂMARA DE COMUNICAÇÃO EM TEMPO REAL & IA DE VOZ / SÍNDROME DO ASTRONAUTA */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-2 font-mono text-xs md:text-sm">
+          <div className="flex items-center gap-2">
+            <Video className="w-4 h-4 text-[#38BDF8]" />
+            <span className="text-white font-bold tracking-wider">
+              2. CÂMARA DE TELEMEDICINA AO VIVO COM A EQUIPA MÉDICA // ANÁLISE DE VOZ & SÍNDROME SAS
+            </span>
+            {analiseVozIA.emChamada && (
+              <span className="text-xs px-2 py-0.5 bg-[#EF4444] text-white font-bold animate-pulse">
+                AO VIVO
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setMostrarTelemedicina(!mostrarTelemedicina)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#060F1E] border border-[#1E3A5F] text-[#8892B0] hover:text-white text-xs font-bold"
+          >
+            {mostrarTelemedicina ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <span>{mostrarTelemedicina ? 'RECOLHER VÍDEO' : 'EXPANDIR CÂMARA'}</span>
+          </button>
+        </div>
+
+        {mostrarTelemedicina && <TelemedicineVideoFeed />}
       </div>
 
       {/* Main Operational Split: Live Interactive Terminal vs Critical Flight Tasks */}
