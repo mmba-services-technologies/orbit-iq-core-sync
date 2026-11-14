@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #060F1E;
+    --bg-panel: #0F253E;
+    --border-structural: #1E3A5F;
+    --tech-blue: #0099FF;
+    --tech-cyan: #38BDF8;
+    --tech-green: #10B981;
+    --tech-amber: #F59E0B;
+    --tech-red: #EF4444;
+    --text-muted: #8892B0;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #060F1E;
+    color: #FFFFFF;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Aerospace Technical Utilities */
+.tech-border {
+  border: 1px solid #1E3A5F;
+}
+
+.tech-panel {
+  background-color: #0F253E;
+  border: 1px solid #1E3A5F;
+}
+
+.tech-panel-alert {
+  background-color: #251C30;
+  border: 1px solid #F59E0B;
+}
+
+/* Subtle aerospace grid pattern */
+.bg-grid-aerospace {
+  background-size: 28px 28px;
+  background-image: 
+    linear-gradient(to right, rgba(30, 58, 95, 0.18) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 58, 95, 0.18) 1px, transparent 1px);
+}
+
+.bg-grid-alert {
+  background-size: 28px 28px;
+  background-image: 
+    linear-gradient(to right, rgba(245, 158, 11, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(245, 158, 11, 0.15) 1px, transparent 1px);
+}
+
+/* Custom scrollbars for dense telemetry feeds */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #060F1E;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E3A5F;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0099FF;
+}

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Deep Space Navy Background Circle -->
+  <circle cx="32" cy="32" r="30" fill="#060F1E" stroke="#1E3A5F" stroke-width="2"/>
+  
+  <!-- Outer Crosshair Ticks -->
+  <line x1="32" y1="4" x2="32" y2="10" stroke="#38BDF8" stroke-width="2"/>
+  <line x1="32" y1="54" x2="32" y2="60" stroke="#38BDF8" stroke-width="2"/>
+  <line x1="4" y1="32" x2="10" y2="32" stroke="#38BDF8" stroke-width="2"/>
+  <line x1="54" y1="32" x2="60" y2="32" stroke="#38BDF8" stroke-width="2"/>
+  
+  <!-- Orbital Ring (Elliptical Tech Orbit) -->
+  <ellipse cx="32" cy="32" rx="22" ry="12" stroke="#0099FF" stroke-width="2.5" stroke-dasharray="4 2" transform="rotate(-25 32 32)"/>
+  
+  <!-- Orbit Node Satellite -->
+  <circle cx="48" cy="22" r="3" fill="#10B981" />
+  
+  <!-- Inner Core Hex / Circle -->
+  <circle cx="32" cy="32" r="9" fill="#0F253E" stroke="#38BDF8" stroke-width="2"/>
+  
+  <!-- Central Glowing Sync Spark -->
+  <circle cx="32" cy="32" r="4.5" fill="#FFFFFF"/>
+</svg>
