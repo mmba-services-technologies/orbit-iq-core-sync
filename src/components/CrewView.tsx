@@ -315,10 +315,10 @@ export const CrewView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Rotate3d className="w-4 h-4 text-[#38BDF8]" />
             <span className="text-white font-bold tracking-wider">
-              1. MODELO CORPORAL 3D // FATO DE ASTRONAUTA & MEDIDOR DE TENSÃO
+              1. BONECO 3D HOLOGRÁFICO // CORPO HUMANO ANATÔMICO EM ROTAÇÃO 360° & MEDIDOR DE TENSÃO
             </span>
             <span className="text-xs text-[#8892B0] hidden md:inline">
-              (Gira 360° mostrando zonas em Verde, Amarelo e Vermelho)
+              (Holograma 3D translúcido azul com levitação orbital e rotação contínua e interativa mostrando zonas em Verde, Amarelo e Vermelho)
             </span>
           </div>
           <button

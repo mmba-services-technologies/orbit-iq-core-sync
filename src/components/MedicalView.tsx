@@ -149,10 +149,10 @@ export const MedicalView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Rotate3d className="w-4 h-4 text-[#38BDF8]" />
             <span className="text-white font-bold tracking-wider">
-              INSPEÇÃO BIOMECÂNICA 3D // FATO ESPACIAL & MANGUITO BRAQUIAL
+              INSPEÇÃO ANATÔMICA 3D // HOLOGRAMA DO CORPO HUMANO EM 360° & MANGUITO BRAQUIAL
             </span>
             <span className="text-xs text-[#8892B0] hidden md:inline">
-              (Avaliação de zonas corporais em rotação contínua de 360°)
+              (Avaliação anatômica do corpo humano em 3D estilo holográfico com levitação microgravitacional contínua)
             </span>
           </div>
           <button

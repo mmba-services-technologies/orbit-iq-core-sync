@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOrbit } from '../context/OrbitContext';
 import { ZonaCorporalBiometrica } from '../types';
+import { HoloAstronaut3D } from './HoloAstronaut3D';
 import { 
   ShieldAlert, 
   Activity, 
@@ -30,7 +31,7 @@ export const AstronautBodyScanner: React.FC = () => {
   const [zonaSelecionada, setZonaSelecionada] = useState<ZonaCorporalBiometrica | null>(null);
   const [modoVisualizacao, setModoVisualizacao] = useState<'HOLOGRAFICO' | 'RAIO_X'>('HOLOGRAFICO');
 
-  // Rotação orbital suave em 360 graus
+  // Rotação orbital contínua suave em 360 graus
   useEffect(() => {
     if (!rotacaoAtiva) return;
     const interval = setInterval(() => {
@@ -39,7 +40,7 @@ export const AstronautBodyScanner: React.FC = () => {
     return () => clearInterval(interval);
   }, [rotacaoAtiva]);
 
-  // Zona ativa padrão: Braço Esquerdo (Manguito)
+  // Zona ativa padrão: Braço Esquerdo (Manguito de Pressão)
   useEffect(() => {
     if (!zonaSelecionada && zonasCorporais.length > 0) {
       setZonaSelecionada(zonasCorporais[2]);
@@ -77,19 +78,6 @@ export const AstronautBodyScanner: React.FC = () => {
   };
 
   const isHipertenso = pressaoArterial.status === 'HIPERTENSAO_CRITICA';
-  const bracoEsqColor = getColorClass(
-    isHipertenso ? 'CRITICO' : pressaoArterial.status === 'ELEVADA' ? 'ALERTA' : 'NORMAL'
-  );
-
-  // Posições dos nós holográficos sobrepostos na figura do astronauta
-  const nosHolograficos = [
-    { id: 'zona-cabeca', top: '15%', left: '50%', zona: zonasCorporais[0] },
-    { id: 'zona-coracao', top: '34%', left: '46%', zona: zonasCorporais[1] },
-    { id: 'zona-braco-esq', top: '38%', left: '72%', zona: zonasCorporais[2], isCuff: true },
-    { id: 'zona-coluna', top: '26%', left: '50%', zona: zonasCorporais[3] },
-    { id: 'zona-maos', top: '56%', left: '78%', zona: zonasCorporais[4] },
-    { id: 'zona-pernas', top: '75%', left: '54%', zona: zonasCorporais[5] },
-  ];
 
   return (
     <div className={`p-4 md:p-5 border transition-colors ${
@@ -121,10 +109,10 @@ export const AstronautBodyScanner: React.FC = () => {
           <Activity className="w-5 h-5 text-[#38BDF8]" />
           <div>
             <span className="font-bold text-sm md:text-base text-white tracking-wider">
-              HOLOGRAMA BIOMÉDICO 3D // FATO ESPACIAL FOTORREALISTA UNREAL 5
+              HOLOGRAMA BIOMÉDICO 3D // CORPO HUMANO ANATÔMICO EM ROTAÇÃO 360°
             </span>
             <div className="text-xs text-[#8892B0]">
-              Mapeamento de fadiga em tempo real de {astronautaAtivo.nome} ({astronautaAtivo.indicativo})
+              Mapeamento anatômico de fadiga em tempo real de {astronautaAtivo.nome} ({astronautaAtivo.indicativo})
             </div>
           </div>
         </div>
@@ -168,29 +156,20 @@ export const AstronautBodyScanner: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Grid: Render Fotorrealista do Astronauta com Camada Holográfica vs Diagnóstico */}
+      {/* Main Grid: Holograma 3D do Boneco Astronauta com Levitação vs Diagnóstico */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-        {/* Lado Esquerdo (6 cols): O Astronauta em Fato Espacial UE5 com Rotação 3D e Holograma */}
+        {/* Lado Esquerdo (6 cols): O Boneco 3D do Astronauta em Traje Espacial com Rotação Real */}
         <div className="lg:col-span-6 relative flex flex-col items-center justify-center bg-[#030712] border border-[#1E3A5F] p-4 min-h-[480px] overflow-hidden">
           {/* Grid Orbital e Efeito Volumétrico de Fundo */}
           <div className="absolute inset-0 bg-grid-aerospace opacity-25 pointer-events-none"></div>
 
           {/* Anéis de Escaneamento Holográfico Tridimensional */}
-          <div className="absolute w-80 h-80 border border-[#0099FF]/30 rounded-full pointer-events-none animate-spin" style={{ animationDuration: '45s' }}></div>
-          <div className="absolute w-96 h-96 border border-[#F59E0B]/20 rounded-full pointer-events-none"></div>
-
-          {/* Laser de Varredura Vertical (Holographic Scan Beam) */}
-          <div 
-            className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#38BDF8] to-transparent opacity-80 pointer-events-none animate-pulse"
-            style={{
-              top: `${(Math.sin(anguloRotacao * 0.05) + 1) * 45 + 5}%`,
-              boxShadow: '0 0 15px #38BDF8',
-            }}
-          ></div>
+          <div className="absolute w-80 h-80 border border-[#0099FF]/25 rounded-full pointer-events-none animate-spin" style={{ animationDuration: '45s' }}></div>
+          <div className="absolute w-96 h-96 border border-[#38BDF8]/15 rounded-full pointer-events-none"></div>
 
           {/* Badge de Ângulo e Iluminação Volumétrica */}
           <div className="absolute top-3 left-3 bg-[#0F253E]/90 backdrop-blur border border-[#1E3A5F] px-2.5 py-1 text-xs font-mono text-[#8892B0] z-20">
-            MOTOR: <strong className="text-white">UNREAL ENGINE 5 // HOLO-SCAN</strong>
+            MOTOR: <strong className="text-white">3D ANATOMICAL HOLOGRAM // LEVITAÇÃO MICROGRAVITACIONAL</strong>
           </div>
 
           <div className="absolute top-3 right-3 bg-[#0F253E]/90 backdrop-blur border border-[#1E3A5F] px-2.5 py-1 text-xs font-mono z-20 flex items-center gap-1.5">
@@ -201,70 +180,28 @@ export const AstronautBodyScanner: React.FC = () => {
             <span className="text-white font-bold">FADIGA: {astronautaAtivo.indiceFadiga}%</span>
           </div>
 
-          {/* Container do Astronauta com Rotação 3D */}
-          <div 
-            className="relative w-72 h-[420px] flex items-center justify-center transition-transform duration-75 select-none"
-            style={{
-              transform: `perspective(1000px) rotateY(${anguloRotacao}deg)`,
-              transformStyle: 'preserve-3d',
-            }}
-          >
-            {/* Imagem Fotorrealista do Astronauta em Fato Espacial */}
-            <img 
-              src="/astronaut-suit.jpg" 
-              alt="Astronauta em Traje Espacial - NASA Space Apps" 
-              className={`w-full h-full object-contain filter drop-shadow-[0_10px_25px_rgba(0,153,255,0.4)] ${
-                modoVisualizacao === 'RAIO_X' ? 'invert hue-rotate-180 brightness-110 contrast-125' : ''
-              }`}
+          {/* Componente 3D Real do Astronauta em Rotação com Levitação Microgravitacional */}
+          <div className="relative w-full flex items-center justify-center select-none py-1">
+            <HoloAstronaut3D
+              rotacaoAngulo={anguloRotacao}
+              onRotacaoChange={setAnguloRotacao}
+              fadigaScore={astronautaAtivo.indiceFadiga}
+              pressaoArterial={pressaoArterial}
+              zonasCorporais={zonasCorporais}
+              zonaSelecionadaId={zonaSelecionada?.id || null}
+              onSelecionarZona={setZonaSelecionada}
+              modoRaioX={modoVisualizacao === 'RAIO_X'}
             />
+          </div>
 
-            {/* Camada Holográfica com Nós Biométricos Sobrepostos */}
-            <div className="absolute inset-0 pointer-events-auto">
-              {nosHolograficos.map((no) => {
-                if (!no.zona) return null;
-                const cor = getColorClass(no.zona.nivelFadiga);
-                const isSelected = zonaSelecionada?.id === no.zona.id;
-
-                return (
-                  <button
-                    key={no.id}
-                    onClick={() => setZonaSelecionada(no.zona)}
-                    style={{ top: no.top, left: no.left, transform: 'translate(-50%, -50%)' }}
-                    className={`absolute z-30 flex items-center justify-center transition-all group ${
-                      isSelected ? 'scale-125' : 'hover:scale-110'
-                    }`}
-                    title={`${no.zona.nome}: ${no.zona.percentual}% de fadiga`}
-                  >
-                    {/* Anel Pulsante da Zona */}
-                    <span 
-                      className={`absolute w-7 h-7 rounded-full border-2 opacity-75 animate-ping`}
-                      style={{ borderColor: cor.stroke }}
-                    ></span>
-
-                    {/* Ponto Central Holográfico */}
-                    <span 
-                      className={`relative w-4 h-4 rounded-full border-2 flex items-center justify-center font-bold text-[8px] text-black ${cor.glow}`}
-                      style={{ backgroundColor: cor.fill, borderColor: '#FFFFFF' }}
-                    >
-                      {no.isCuff && '🩺'}
-                    </span>
-
-                    {/* Rótulo Flutuante do Braço Esquerdo */}
-                    {no.isCuff && (
-                      <div className="absolute left-6 top-0 bg-[#0F253E]/95 border border-[#1E3A5F] px-2 py-0.5 text-[10px] font-mono whitespace-nowrap shadow-xl flex items-center gap-1 pointer-events-none">
-                        <span className={`font-bold ${isHipertenso ? 'text-[#EF4444] animate-pulse' : 'text-[#38BDF8]'}`}>
-                          {pressaoArterial.sistolica}/{pressaoArterial.diastolica} mmHg
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          {/* Instrução Interativa de Rotação */}
+          <div className="text-[11px] font-mono text-[#8892B0] mt-1 flex items-center gap-1.5 z-20">
+            <Rotate3d className="w-3.5 h-3.5 text-[#38BDF8]" />
+            <span>Arraste com o mouse para girar 360° em qualquer direção | Clique nos nós para selecionar</span>
           </div>
 
           {/* Legenda de Cores Oficiais */}
-          <div className="flex items-center gap-4 mt-3 bg-[#0F253E] border border-[#1E3A5F] px-3.5 py-1.5 text-xs font-mono z-20">
+          <div className="flex items-center gap-4 mt-2 bg-[#0F253E] border border-[#1E3A5F] px-3.5 py-1.5 text-xs font-mono z-20">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-[#10B981]"></span>
               <span className="text-white">Verde: Nominal</span>
@@ -352,7 +289,7 @@ export const AstronautBodyScanner: React.FC = () => {
           {/* Seletor Rápido e Diagnóstico das Zonas Corporais */}
           <div className="bg-[#060F1E] border border-[#1E3A5F] p-3.5 space-y-2.5">
             <div className="text-xs text-[#8892B0] font-bold tracking-wider">
-              INSPEÇÃO BIOMÉDICA POR REGIÃO DO TRAJE ESPACIAL:
+              INSPEÇÃO BIOMÉDICA POR REGIÃO DO CORPO HUMANO:
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

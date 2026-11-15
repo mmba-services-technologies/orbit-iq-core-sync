@@ -1,8 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import * as THREE from 'three';
 import { ZonaCorporalBiometrica, TelemetriaPressaoArterial } from '../types';
 
-interface HoloAstronaut3DProps {
+export interface HoloAstronaut3DProps {
   rotacaoAngulo: number; // em graus
+  onRotacaoChange?: (novoAngulo: number) => void;
   fadigaScore: number;
   pressaoArterial: TelemetriaPressaoArterial;
   zonasCorporais: ZonaCorporalBiometrica[];
@@ -11,22 +13,16 @@ interface HoloAstronaut3DProps {
   modoRaioX?: boolean;
 }
 
-interface Point3D {
-  x: number;
-  y: number;
-  z: number;
-}
-
-interface Polygon3D {
-  pts: Point3D[];
-  color: string;
-  stroke: string;
-  isVisor?: boolean;
-  isCuff?: boolean;
+interface Node3DDef {
+  id: string;
+  zonaId: string;
+  label: string;
+  position: THREE.Vector3;
 }
 
 export const HoloAstronaut3D: React.FC<HoloAstronaut3DProps> = ({
   rotacaoAngulo,
+  onRotacaoChange,
   fadigaScore,
   pressaoArterial,
   zonasCorporais,
@@ -34,508 +30,647 @@ export const HoloAstronaut3D: React.FC<HoloAstronaut3DProps> = ({
   onSelecionarZona,
   modoRaioX = false,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animTimeRef = useRef<number>(0);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const canvas2dRef = useRef<HTMLCanvasElement>(null);
+
+  const isDraggingRef = useRef<boolean>(false);
+  const startDragXRef = useRef<number>(0);
+  const startAngleRef = useRef<number>(0);
 
   const isHipertenso = pressaoArterial.status === 'HIPERTENSAO_CRITICA';
 
-  // Obter cores de estado baseadas na fadiga
-  const getZoneColor = (nivel: 'NORMAL' | 'ALERTA' | 'CRITICO') => {
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const projectedNodesRef = useRef<
+    {
+      id: string;
+      zona: ZonaCorporalBiometrica;
+      sx: number;
+      sy: number;
+      sz: number;
+      label: string;
+      color: string;
+      isSelected: boolean;
+    }[]
+  >([]);
+
+  // Obter cores oficiais da missão
+  const getZoneColor = useCallback((nivel?: 'NORMAL' | 'ALERTA' | 'CRITICO') => {
     if (nivel === 'CRITICO') return '#EF4444';
     if (nivel === 'ALERTA') return '#F59E0B';
     return '#10B981';
+  }, []);
+
+  // Interações de Mouse Drag
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    startDragXRef.current = e.clientX;
+    startAngleRef.current = rotacaoAngulo;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDraggingRef.current && onRotacaoChange) {
+      const deltaX = e.clientX - startDragXRef.current;
+      const novo = (startAngleRef.current + deltaX * 0.8 + 360) % 360;
+      onRotacaoChange(novo);
+    } else {
+      // Detecção de hover sobre os nós
+      const container = mountRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const hit = projectedNodesRef.current.find((node) => {
+        const dist = Math.hypot(mouseX - node.sx, mouseY - node.sy);
+        return dist <= 20;
+      });
+      setHoveredNodeId(hit ? hit.id : null);
+    }
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    const container = mountRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const clickedNode = projectedNodesRef.current.find((node) => {
+      const dist = Math.hypot(mouseX - node.sx, mouseY - node.sy);
+      return dist <= 24;
+    });
+
+    if (clickedNode) {
+      onSelecionarZona(clickedNode.zona);
+    }
+  };
+
+  // Suporte a Touch em dispositivos móveis
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      isDraggingRef.current = true;
+      startDragXRef.current = e.touches[0].clientX;
+      startAngleRef.current = rotacaoAngulo;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isDraggingRef.current && onRotacaoChange && e.touches.length === 1) {
+      const deltaX = e.touches[0].clientX - startDragXRef.current;
+      const novo = (startAngleRef.current + deltaX * 0.8 + 360) % 360;
+      onRotacaoChange(novo);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
   };
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const container = mountRef.current;
+    if (!container) return;
 
-    let animationFrameId: number;
+    const width = container.clientWidth || 440;
+    const height = 480;
 
-    const render = () => {
-      animTimeRef.current += 1;
-      const t = animTimeRef.current;
-      const width = canvas.width;
-      const height = canvas.height;
-      const cx = width / 2;
-      const cy = height / 2 + 10;
+    // 1. Cena Three.js
+    const scene = new THREE.Scene();
 
-      // Limpar com fundo escuro aeroespacial profundo
-      ctx.clearRect(0, 0, width, height);
+    // 2. Câmera Perspectiva
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+    camera.position.set(0, 0.1, 5.2);
 
-      // Efeito de levitação gravitacional suave (Floating astronaut)
-      const floatOffset = Math.sin(t * 0.04) * 8;
-      const pitchRad = (8 * Math.PI) / 180; // leve inclinação de 8 graus para ver o topo em perspectiva
+    // 3. Renderizador WebGL
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
+
+    // 4. Shader Holográfico Transparente Azul (Inspirado no Homem Vitruviano Médico Holográfico)
+    const holoVertexShader = `
+      varying vec3 vNormal;
+      varying vec3 vViewPosition;
+      varying vec3 vWorldPosition;
+
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vViewPosition = -mvPosition.xyz;
+        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `;
+
+    const holoFragmentShader = `
+      uniform vec3 uColor;
+      uniform vec3 uRimColor;
+      uniform float uTime;
+      uniform float uOpacity;
+      uniform float uFresnelPower;
+      uniform float uScanlineDensity;
+
+      varying vec3 vNormal;
+      varying vec3 vViewPosition;
+      varying vec3 vWorldPosition;
+
+      void main() {
+        vec3 normal = normalize(vNormal);
+        vec3 viewDir = normalize(vViewPosition);
+
+        // Efeito Fresnel Transparente de Vidro / Energia
+        float fresnel = 1.0 - clamp(abs(dot(normal, viewDir)), 0.0, 1.0);
+        fresnel = pow(fresnel, uFresnelPower);
+
+        // Linhas de varredura holográfica vertical (Scanlines futuristas)
+        float scanline = sin(vWorldPosition.y * uScanlineDensity - uTime * 4.0) * 0.08 + 0.92;
+
+        // Combinação de cor do núcleo azul profundo com borda ciano vibrante
+        vec3 finalColor = mix(uColor * 0.45, uRimColor * 1.5, fresnel) * scanline;
+        finalColor += uRimColor * pow(fresnel, 2.5) * 0.75;
+
+        float alpha = clamp(0.22 + fresnel * 0.78, 0.0, 1.0) * uOpacity;
+
+        gl_FragColor = vec4(finalColor, alpha);
+      }
+    `;
+
+    const holoMaterial = new THREE.ShaderMaterial({
+      vertexShader: holoVertexShader,
+      fragmentShader: holoFragmentShader,
+      uniforms: {
+        uColor: { value: new THREE.Color(modoRaioX ? 0x0088cc : 0x0055ff) },
+        uRimColor: { value: new THREE.Color(modoRaioX ? 0x00ffff : 0x38bdf8) },
+        uTime: { value: 0 },
+        uOpacity: { value: modoRaioX ? 0.75 : 0.88 },
+        uFresnelPower: { value: modoRaioX ? 1.6 : 2.0 },
+        uScanlineDensity: { value: 28.0 },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+
+    // Material de Manguito de Pressão Arterial
+    const cuffMaterial = new THREE.MeshBasicMaterial({
+      color: isHipertenso ? 0xef4444 : 0x0099ff,
+      wireframe: false,
+      transparent: true,
+      opacity: 0.85,
+    });
+
+    // Grupo Raiz do Humanoide Anatômico
+    const humanGroup = new THREE.Group();
+    scene.add(humanGroup);
+
+    // ---------------- CORPO HUMANO ANATÔMICO SEM ROUPA ----------------
+    // Proporções atléticas do corpo humano (Homem Vitruviano em holograma médico)
+
+    // A. Cabeça & Crânio
+    const headGeom = new THREE.SphereGeometry(0.24, 24, 24);
+    headGeom.scale(0.85, 1.15, 0.95);
+    const headMesh = new THREE.Mesh(headGeom, holoMaterial);
+    headMesh.position.set(0, 1.55, 0);
+    humanGroup.add(headMesh);
+
+    // Queixo / Mandíbula esculpida
+    const chinGeom = new THREE.CylinderGeometry(0.12, 0.08, 0.16, 16);
+    const chinMesh = new THREE.Mesh(chinGeom, holoMaterial);
+    chinMesh.position.set(0, 1.38, 0.06);
+    chinMesh.rotation.x = 0.2;
+    humanGroup.add(chinMesh);
+
+    // Pescoço
+    const neckGeom = new THREE.CylinderGeometry(0.11, 0.13, 0.22, 16);
+    const neckMesh = new THREE.Mesh(neckGeom, holoMaterial);
+    neckMesh.position.set(0, 1.28, 0);
+    humanGroup.add(neckMesh);
+
+    // B. Tronco Superior / Peitorais & Costelas
+    const chestGeom = new THREE.CylinderGeometry(0.38, 0.32, 0.45, 20);
+    chestGeom.scale(1.15, 1.0, 0.75);
+    const chestMesh = new THREE.Mesh(chestGeom, holoMaterial);
+    chestMesh.position.set(0, 1.05, 0);
+    humanGroup.add(chestMesh);
+
+    // Peitoral Esquerdo e Direito (Músculos Peitorais)
+    const pecGeom = new THREE.SphereGeometry(0.15, 16, 16);
+    pecGeom.scale(1.1, 0.75, 0.55);
+    const pecL = new THREE.Mesh(pecGeom, holoMaterial);
+    pecL.position.set(0.14, 1.08, 0.14);
+    humanGroup.add(pecL);
+
+    const pecR = new THREE.Mesh(pecGeom, holoMaterial);
+    pecR.position.set(-0.14, 1.08, 0.14);
+    humanGroup.add(pecR);
+
+    // C. Tronco Médio / Abdômen
+    const absGeom = new THREE.CylinderGeometry(0.30, 0.29, 0.42, 20);
+    absGeom.scale(1.0, 1.0, 0.7);
+    const absMesh = new THREE.Mesh(absGeom, holoMaterial);
+    absMesh.position.set(0, 0.65, 0);
+    humanGroup.add(absMesh);
+
+    // D. Pelve & Quadril
+    const pelvisGeom = new THREE.CylinderGeometry(0.29, 0.32, 0.28, 20);
+    pelvisGeom.scale(1.1, 1.0, 0.75);
+    const pelvisMesh = new THREE.Mesh(pelvisGeom, holoMaterial);
+    pelvisMesh.position.set(0, 0.32, 0);
+    humanGroup.add(pelvisMesh);
+
+    // E. Coluna Vertebral Luminescente (Visível no centro do corpo)
+    const spineGroup = new THREE.Group();
+    for (let i = 0; i < 14; i++) {
+      const vertGeom = new THREE.CylinderGeometry(0.04, 0.045, 0.05, 12);
+      const vertMesh = new THREE.Mesh(
+        vertGeom,
+        new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.65,
+        })
+      );
+      vertMesh.position.set(0, 0.35 + i * 0.07, -0.06);
+      spineGroup.add(vertMesh);
+    }
+    humanGroup.add(spineGroup);
+
+    // F. Coração Biométrico Pulsante (Lado esquerdo do peito)
+    const heartGeom = new THREE.SphereGeometry(0.075, 14, 14);
+    heartGeom.scale(0.9, 1.1, 0.85);
+    const heartMesh = new THREE.Mesh(
+      heartGeom,
+      new THREE.MeshBasicMaterial({
+        color: isHipertenso ? 0xef4444 : 0x00f0ff,
+        transparent: true,
+        opacity: 0.9,
+      })
+    );
+    heartMesh.position.set(0.12, 1.04, 0.06);
+    humanGroup.add(heartMesh);
+
+    // G. Membros Superiores (Braços Anatômicos em Pose A Aberta)
+    // Braço Esquerdo
+    const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 14), holoMaterial);
+    shoulderL.position.set(0.48, 1.18, 0);
+    humanGroup.add(shoulderL);
+
+    const bicepLGeom = new THREE.CylinderGeometry(0.09, 0.08, 0.38, 16);
+    const bicepL = new THREE.Mesh(bicepLGeom, holoMaterial);
+    bicepL.position.set(0.58, 0.98, 0);
+    bicepL.rotation.z = -0.32;
+    humanGroup.add(bicepL);
+
+    // Manguito de Pressão Arterial no Braço Esquerdo (Anel Holo-Digital)
+    const cuffGeom = new THREE.CylinderGeometry(0.115, 0.115, 0.14, 24);
+    const cuffMesh = new THREE.Mesh(cuffGeom, cuffMaterial);
+    cuffMesh.position.set(0.58, 1.0, 0);
+    cuffMesh.rotation.z = -0.32;
+    humanGroup.add(cuffMesh);
+
+    const forearmLGeom = new THREE.CylinderGeometry(0.075, 0.065, 0.42, 16);
+    const forearmL = new THREE.Mesh(forearmLGeom, holoMaterial);
+    forearmL.position.set(0.72, 0.65, 0.04);
+    forearmL.rotation.z = -0.38;
+    humanGroup.add(forearmL);
+
+    const handLGeom = new THREE.SphereGeometry(0.06, 12, 12);
+    handLGeom.scale(1.2, 1.5, 0.6);
+    const handL = new THREE.Mesh(handLGeom, holoMaterial);
+    handL.position.set(0.83, 0.38, 0.06);
+    handL.rotation.z = -0.35;
+    humanGroup.add(handL);
+
+    // Braço Direito
+    const shoulderR = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 14), holoMaterial);
+    shoulderR.position.set(-0.48, 1.18, 0);
+    humanGroup.add(shoulderR);
+
+    const bicepRGeom = new THREE.CylinderGeometry(0.09, 0.08, 0.38, 16);
+    const bicepR = new THREE.Mesh(bicepRGeom, holoMaterial);
+    bicepR.position.set(-0.58, 0.98, 0);
+    bicepR.rotation.z = 0.32;
+    humanGroup.add(bicepR);
+
+    const forearmRGeom = new THREE.CylinderGeometry(0.075, 0.065, 0.42, 16);
+    const forearmR = new THREE.Mesh(forearmRGeom, holoMaterial);
+    forearmR.position.set(-0.72, 0.65, 0.04);
+    forearmR.rotation.z = 0.38;
+    humanGroup.add(forearmR);
+
+    const handRGeom = new THREE.SphereGeometry(0.06, 12, 12);
+    handRGeom.scale(1.2, 1.5, 0.6);
+    const handR = new THREE.Mesh(handRGeom, holoMaterial);
+    handR.position.set(-0.83, 0.38, 0.06);
+    handR.rotation.z = 0.35;
+    humanGroup.add(handR);
+
+    // H. Membros Inferiores (Pernas Anatômicas)
+    // Perna Esquerda
+    const thighLGeom = new THREE.CylinderGeometry(0.14, 0.11, 0.65, 18);
+    const thighL = new THREE.Mesh(thighLGeom, holoMaterial);
+    thighL.position.set(0.18, -0.12, 0);
+    thighL.rotation.z = -0.06;
+    humanGroup.add(thighL);
+
+    const kneeL = new THREE.Mesh(new THREE.SphereGeometry(0.10, 14, 14), holoMaterial);
+    kneeL.position.set(0.19, -0.48, 0.02);
+    humanGroup.add(kneeL);
+
+    const calfLGeom = new THREE.CylinderGeometry(0.10, 0.075, 0.65, 18);
+    const calfL = new THREE.Mesh(calfLGeom, holoMaterial);
+    calfL.position.set(0.19, -0.85, 0);
+    humanGroup.add(calfL);
+
+    const footLGeom = new THREE.BoxGeometry(0.10, 0.07, 0.22);
+    const footL = new THREE.Mesh(footLGeom, holoMaterial);
+    footL.position.set(0.20, -1.22, 0.07);
+    humanGroup.add(footL);
+
+    // Perna Direita
+    const thighRGeom = new THREE.CylinderGeometry(0.14, 0.11, 0.65, 18);
+    const thighR = new THREE.Mesh(thighRGeom, holoMaterial);
+    thighR.position.set(-0.18, -0.12, 0);
+    thighR.rotation.z = 0.06;
+    humanGroup.add(thighR);
+
+    const kneeR = new THREE.Mesh(new THREE.SphereGeometry(0.10, 14, 14), holoMaterial);
+    kneeR.position.set(-0.19, -0.48, 0.02);
+    humanGroup.add(kneeR);
+
+    const calfRGeom = new THREE.CylinderGeometry(0.10, 0.075, 0.65, 18);
+    const calfR = new THREE.Mesh(calfRGeom, holoMaterial);
+    calfR.position.set(-0.19, -0.85, 0);
+    humanGroup.add(calfR);
+
+    const footRGeom = new THREE.BoxGeometry(0.10, 0.07, 0.22);
+    const footR = new THREE.Mesh(footRGeom, holoMaterial);
+    footR.position.set(-0.20, -1.22, 0.07);
+    humanGroup.add(footR);
+
+    // I. Matriz Interna de Bio-Partículas / DNA Neural (Luz interna subindo)
+    const particleCount = 70;
+    const particleGeom = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3 + 0] = (Math.random() - 0.5) * 0.45;
+      particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 2.8 + 0.2;
+      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 0.25;
+    }
+    particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0x38bdf8,
+      size: 0.035,
+      transparent: true,
+      opacity: 0.75,
+      blending: THREE.AdditiveBlending,
+    });
+    const particleMesh = new THREE.Points(particleGeom, particleMat);
+    humanGroup.add(particleMesh);
+
+    // J. Base Emissora Holográfica no Piso
+    const baseGroup = new THREE.Group();
+    baseGroup.position.set(0, -1.35, 0);
+    baseGroup.rotation.x = Math.PI / 2;
+
+    const ringGeom1 = new THREE.RingGeometry(1.05, 1.08, 64);
+    const ringMat1 = new THREE.MeshBasicMaterial({
+      color: 0x0099ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.5,
+    });
+    baseGroup.add(new THREE.Mesh(ringGeom1, ringMat1));
+
+    const ringGeom2 = new THREE.RingGeometry(0.72, 0.74, 48);
+    const ringMat2 = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.4,
+    });
+    baseGroup.add(new THREE.Mesh(ringGeom2, ringMat2));
+    scene.add(baseGroup);
+
+    // K. Disco de Varredura Laser de Telemetria
+    const scanGeom = new THREE.RingGeometry(0.01, 0.95, 32);
+    const scanMat = new THREE.MeshBasicMaterial({
+      color: modoRaioX ? 0x00ffff : 0x38bdf8,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+    });
+    const scanMesh = new THREE.Mesh(scanGeom, scanMat);
+    scanMesh.rotation.x = Math.PI / 2;
+    scene.add(scanMesh);
+
+    // 5. Definição dos 6 Nós Biométricos em Coordenadas 3D Locais do Humanoide
+    const nodeDefs: Node3DDef[] = [
+      { id: 'zona-cabeca', zonaId: 'zona-cabeca', label: 'CÓRTEX // HUD', position: new THREE.Vector3(0, 1.58, 0.26) },
+      { id: 'zona-coracao', zonaId: 'zona-coracao', label: 'CORAÇÃO', position: new THREE.Vector3(0.12, 1.05, 0.20) },
+      { id: 'zona-braco-esq', zonaId: 'zona-braco-esq', label: 'MANGUITO ESQ', position: new THREE.Vector3(0.58, 1.0, 0.15) },
+      { id: 'zona-coluna', zonaId: 'zona-coluna', label: 'COLUNA', position: new THREE.Vector3(0, 0.85, -0.22) },
+      { id: 'zona-maos', zonaId: 'zona-maos', label: 'MOTRICIDADE', position: new THREE.Vector3(0.83, 0.38, 0.10) },
+      { id: 'zona-pernas', zonaId: 'zona-pernas', label: 'CIRCULAÇÃO', position: new THREE.Vector3(0.19, -0.48, 0.14) },
+    ];
+
+    let animId: number;
+    let clock = new THREE.Clock();
+
+    // 6. Loop de Animação e Renderização em 60 FPS
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      const elapsedTime = clock.getElapsedTime();
+
+      // Levitação suave em microgravidade
+      const floatY = Math.sin(elapsedTime * 1.8) * 0.06;
+      const pitchSway = Math.sin(elapsedTime * 1.2) * 0.015;
+      const rollSway = Math.cos(elapsedTime * 1.4) * 0.012;
+
+      humanGroup.position.y = floatY;
+      humanGroup.rotation.x = pitchSway;
+      humanGroup.rotation.z = rollSway;
+
+      // Rotação em 360 graus sincronizada com o estado
       const yawRad = (rotacaoAngulo * Math.PI) / 180;
+      humanGroup.rotation.y = yawRad;
 
-      // Função de Projeção 3D -> 2D
-      const project = (p: Point3D) => {
-        // 1. Rotação em Y (Yaw)
-        const x1 = p.x * Math.cos(yawRad) + p.z * Math.sin(yawRad);
-        const z1 = -p.x * Math.sin(yawRad) + p.z * Math.cos(yawRad);
+      // Pulsação do Coração
+      const heartPulse = 1.0 + Math.sin(elapsedTime * 6.5) * 0.12;
+      heartMesh.scale.set(heartPulse, heartPulse, heartPulse);
 
-        // 2. Rotação em X (Pitch suave)
-        const y2 = p.y * Math.cos(pitchRad) - z1 * Math.sin(pitchRad);
-        const z2 = p.y * Math.sin(pitchRad) + z1 * Math.cos(pitchRad);
+      // Pulsação do Manguito de Pressão se Hipertenso
+      if (isHipertenso) {
+        const cuffAlertPulse = 1.0 + Math.sin(elapsedTime * 10.0) * 0.14;
+        cuffMesh.scale.set(cuffAlertPulse, 1.0, cuffAlertPulse);
+        cuffMaterial.color.setHex(0xef4444);
+      } else {
+        cuffMesh.scale.set(1.0, 1.0, 1.0);
+        cuffMaterial.color.setHex(0x0099ff);
+      }
 
-        // 3. Flutuação microgravitacional
-        const y3 = y2 + floatOffset;
+      // Varredura Laser Subindo e Descendo
+      const scanY = Math.sin(elapsedTime * 1.5) * 1.45 + 0.15;
+      scanMesh.position.y = scanY;
 
-        // 4. Projeção em Perspectiva
-        const fov = 380;
-        const scale = fov / (fov + z2 + 100);
+      // Giro da Base Holográfica
+      baseGroup.rotation.z = elapsedTime * 0.4;
 
-        return {
-          sx: cx + x1 * scale,
-          sy: cy + y3 * scale,
-          sz: z2,
-          scale,
-        };
-      };
+      // Atualizar Uniforms do Shader
+      holoMaterial.uniforms.uTime.value = elapsedTime;
 
-      // 1. Desenhar Emissor Holográfico Circular no Piso (Holo-Emitter Ring)
-      const drawEmitterBase = () => {
-        const baseRadius = 110;
-        ctx.save();
-        ctx.lineWidth = 1.5;
+      // Renderizar Cena 3D
+      renderer.render(scene, camera);
 
-        // Anel elíptico principal no chão
-        ctx.strokeStyle = modoRaioX ? 'rgba(0, 255, 255, 0.4)' : 'rgba(0, 153, 255, 0.4)';
-        ctx.beginPath();
-        for (let a = 0; a <= 360; a += 10) {
-          const ar = (a * Math.PI) / 180;
-          const p = project({ x: Math.cos(ar) * baseRadius, y: 195, z: Math.sin(ar) * baseRadius });
-          if (a === 0) ctx.moveTo(p.sx, p.sy);
-          else ctx.lineTo(p.sx, p.sy);
+      // 7. Projeção dos Nós Biométricos 3D -> Tela 2D (Overlay Técnico)
+      const canvas2d = canvas2dRef.current;
+      if (canvas2d) {
+        const ctx2d = canvas2d.getContext('2d');
+        if (ctx2d) {
+          ctx2d.clearRect(0, 0, width, height);
+
+          const currentProjected: {
+            id: string;
+            zona: ZonaCorporalBiometrica;
+            sx: number;
+            sy: number;
+            sz: number;
+            label: string;
+            color: string;
+            isSelected: boolean;
+          }[] = [];
+
+          nodeDefs.forEach((ndef) => {
+            const zona = zonasCorporais.find((z) => z.id === ndef.zonaId);
+            if (!zona) return;
+
+            // Converter ponto local do humanoide para espaço global com rotação e flutuação
+            const worldPos = ndef.position.clone();
+            humanGroup.localToWorld(worldPos);
+
+            // Projetar para espaço de tela (NDC -> Pixels)
+            const projected = worldPos.clone().project(camera);
+            const sx = ((projected.x + 1) / 2) * width;
+            const sy = ((-projected.y + 1) / 2) * height;
+            const sz = projected.z;
+
+            const isSelected = zonaSelecionadaId === zona.id;
+            const isHovered = hoveredNodeId === ndef.id;
+            const cor = getZoneColor(zona.nivelFadiga);
+
+            currentProjected.push({
+              id: ndef.id,
+              zona,
+              sx,
+              sy,
+              sz,
+              label: ndef.label,
+              color: cor,
+              isSelected,
+            });
+
+            // Se o nó estiver voltado para a frente da visão (Z relativo)
+            if (projected.z < 1.0) {
+              ctx2d.save();
+              ctx2d.shadowColor = cor;
+              ctx2d.shadowBlur = isSelected ? 18 : isHovered ? 14 : 8;
+
+              // Anel pulsante
+              const pulseR = (isSelected ? 9 : 6) + Math.sin(elapsedTime * 6.0) * 2;
+              ctx2d.strokeStyle = cor;
+              ctx2d.lineWidth = isSelected ? 2.5 : 1.5;
+              ctx2d.beginPath();
+              ctx2d.arc(sx, sy, pulseR, 0, Math.PI * 2);
+              ctx2d.stroke();
+
+              // Ponto central
+              ctx2d.fillStyle = cor;
+              ctx2d.beginPath();
+              ctx2d.arc(sx, sy, isSelected ? 5 : 4, 0, Math.PI * 2);
+              ctx2d.fill();
+
+              // Linha técnica de chamada com etiqueta
+              const tagX = sx + (ndef.position.x >= 0 ? 38 : -38);
+              const tagY = sy - 14;
+
+              ctx2d.strokeStyle = isSelected ? '#FFFFFF' : 'rgba(56, 189, 248, 0.45)';
+              ctx2d.lineWidth = 1;
+              ctx2d.beginPath();
+              ctx2d.moveTo(sx, sy);
+              ctx2d.lineTo(tagX, tagY);
+              ctx2d.lineTo(tagX + (ndef.position.x >= 0 ? 46 : -46), tagY);
+              ctx2d.stroke();
+
+              ctx2d.fillStyle = isSelected ? '#FFFFFF' : '#38BDF8';
+              ctx2d.font = 'bold 9px JetBrains Mono, monospace';
+              ctx2d.textAlign = ndef.position.x >= 0 ? 'left' : 'right';
+              ctx2d.fillText(`${ndef.label} [${zona.percentual}%]`, tagX + (ndef.position.x >= 0 ? 4 : -4), tagY - 2);
+
+              ctx2d.restore();
+            }
+          });
+
+          projectedNodesRef.current = currentProjected;
         }
-        ctx.closePath();
-        ctx.stroke();
-
-        // Anel interno giratório
-        const spinA = t * 0.02;
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
-        ctx.setLineDash([4, 6]);
-        ctx.beginPath();
-        for (let a = 0; a <= 360; a += 15) {
-          const ar = (a * Math.PI) / 180 + spinA;
-          const p = project({ x: Math.cos(ar) * (baseRadius * 0.7), y: 195, z: Math.sin(ar) * (baseRadius * 0.7) });
-          if (a === 0) ctx.moveTo(p.sx, p.sy);
-          else ctx.lineTo(p.sx, p.sy);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Raios de luz verticais subindo do emissor holográfico
-        for (let i = 0; i < 4; i++) {
-          const a = (i * 90 * Math.PI) / 180 + spinA;
-          const pBottom = project({ x: Math.cos(a) * (baseRadius * 0.85), y: 195, z: Math.sin(a) * (baseRadius * 0.85) });
-          const pTop = project({ x: Math.cos(a) * (baseRadius * 0.85), y: -190, z: Math.sin(a) * (baseRadius * 0.85) });
-
-          const beamGrad = ctx.createLinearGradient(pBottom.sx, pBottom.sy, pTop.sx, pTop.sy);
-          beamGrad.addColorStop(0, 'rgba(0, 153, 255, 0.3)');
-          beamGrad.addColorStop(1, 'rgba(0, 153, 255, 0)');
-          ctx.strokeStyle = beamGrad;
-          ctx.beginPath();
-          ctx.moveTo(pBottom.sx, pBottom.sy);
-          ctx.lineTo(pTop.sx, pTop.sy);
-          ctx.stroke();
-        }
-
-        ctx.restore();
-      };
-
-      drawEmitterBase();
-
-      // 2. Modelo Geométrico Tridimensional do Fato de Astronauta (Wireframe & Solid Hologram)
-      const polys: Polygon3D[] = [];
-
-      // HELMET (Esfera / Cubo facetado do Capacete)
-      const hSize = 28;
-      const hY = -140;
-      polys.push(
-        // Frente do capacete / Visor
-        {
-          pts: [
-            { x: -hSize * 0.8, y: hY - hSize * 0.7, z: hSize * 0.9 },
-            { x: hSize * 0.8, y: hY - hSize * 0.7, z: hSize * 0.9 },
-            { x: hSize * 0.7, y: hY + hSize * 0.7, z: hSize * 0.9 },
-            { x: -hSize * 0.7, y: hY + hSize * 0.7, z: hSize * 0.9 },
-          ],
-          color: 'rgba(217, 119, 6, 0.45)', // Dourado âmbar espacial
-          stroke: '#38BDF8',
-          isVisor: true,
-        },
-        // Topo do capacete
-        {
-          pts: [
-            { x: -hSize, y: hY - hSize, z: -hSize * 0.6 },
-            { x: hSize, y: hY - hSize, z: -hSize * 0.6 },
-            { x: hSize * 0.8, y: hY - hSize * 0.7, z: hSize * 0.9 },
-            { x: -hSize * 0.8, y: hY - hSize * 0.7, z: hSize * 0.9 },
-          ],
-          color: 'rgba(15, 37, 62, 0.75)',
-          stroke: '#0099FF',
-        },
-        // Traseira do capacete
-        {
-          pts: [
-            { x: -hSize, y: hY - hSize, z: -hSize * 0.9 },
-            { x: hSize, y: hY - hSize, z: -hSize * 0.9 },
-            { x: hSize, y: hY + hSize * 0.8, z: -hSize * 0.9 },
-            { x: -hSize, y: hY + hSize * 0.8, z: -hSize * 0.9 },
-          ],
-          color: 'rgba(10, 25, 47, 0.85)',
-          stroke: '#1E3A5F',
-        }
-      );
-
-      // TORSO & PEITORAL (Tronco Pressurizado do Fato)
-      const tW = 38;
-      const tH = 75;
-      const tY = -105;
-      const tD = 24;
-
-      polys.push(
-        // Peitoral Frontal
-        {
-          pts: [
-            { x: -tW, y: tY, z: tD },
-            { x: tW, y: tY, z: tD },
-            { x: tW * 0.8, y: tY + tH, z: tD * 0.8 },
-            { x: -tW * 0.8, y: tY + tH, z: tD * 0.8 },
-          ],
-          color: 'rgba(15, 37, 62, 0.8)',
-          stroke: '#38BDF8',
-        },
-        // Costas do Torso
-        {
-          pts: [
-            { x: tW, y: tY, z: -tD },
-            { x: -tW, y: tY, z: -tD },
-            { x: -tW * 0.8, y: tY + tH, z: -tD * 0.8 },
-            { x: tW * 0.8, y: tY + tH, z: -tD * 0.8 },
-          ],
-          color: 'rgba(10, 25, 47, 0.85)',
-          stroke: '#1E3A5F',
-        },
-        // Lado Esquerdo do Torso
-        {
-          pts: [
-            { x: tW, y: tY, z: tD },
-            { x: tW, y: tY, z: -tD },
-            { x: tW * 0.8, y: tY + tH, z: -tD * 0.8 },
-            { x: tW * 0.8, y: tY + tH, z: tD * 0.8 },
-          ],
-          color: 'rgba(15, 37, 62, 0.7)',
-          stroke: '#0099FF',
-        },
-        // Lado Direito do Torso
-        {
-          pts: [
-            { x: -tW, y: tY, z: -tD },
-            { x: -tW, y: tY, z: tD },
-            { x: -tW * 0.8, y: tY + tH, z: tD * 0.8 },
-            { x: -tW * 0.8, y: tY + tH, z: -tD * 0.8 },
-          ],
-          color: 'rgba(15, 37, 62, 0.7)',
-          stroke: '#0099FF',
-        }
-      );
-
-      // PLSS BACKPACK (Mochila de Oxigênio e Suporte de Vida Atrás do Torso)
-      const bW = 32;
-      const bH = 80;
-      const bY = -115;
-      const bZ = -44;
-
-      polys.push({
-        pts: [
-          { x: -bW, y: bY, z: bZ },
-          { x: bW, y: bY, z: bZ },
-          { x: bW * 0.9, y: bY + bH, z: bZ },
-          { x: -bW * 0.9, y: bY + bH, z: bZ },
-        ],
-        color: 'rgba(2, 6, 23, 0.9)',
-        stroke: '#0099FF',
-      });
-
-      // BRAÇO ESQUERDO COM O MANGUITO DE TENSÃO ARTERIAL (Destaque Principal)
-      // Ombro até cotovelo
-      const cuffY = -68;
-      polys.push(
-        // Braço superior esquerdo
-        {
-          pts: [
-            { x: tW + 2, y: tY + 8, z: 0 },
-            { x: tW + 22, y: tY + 20, z: 4 },
-            { x: tW + 20, y: tY + 55, z: 4 },
-            { x: tW + 4, y: tY + 50, z: 0 },
-          ],
-          color: 'rgba(15, 37, 62, 0.7)',
-          stroke: '#38BDF8',
-        },
-        // MANGUITO DE PRESSÃO ARTERIAL INTEGRADO (Cilindro luminoso)
-        {
-          pts: [
-            { x: tW + 12, y: cuffY - 10, z: -10 },
-            { x: tW + 28, y: cuffY - 6, z: 8 },
-            { x: tW + 27, y: cuffY + 14, z: 8 },
-            { x: tW + 11, y: cuffY + 10, z: -10 },
-          ],
-          color: isHipertenso ? 'rgba(239, 68, 68, 0.6)' : 'rgba(0, 153, 255, 0.5)',
-          stroke: isHipertenso ? '#EF4444' : '#38BDF8',
-          isCuff: true,
-        },
-        // Antebraço e luva esquerda
-        {
-          pts: [
-            { x: tW + 20, y: tY + 55, z: 4 },
-            { x: tW + 28, y: tY + 95, z: 12 },
-            { x: tW + 18, y: tY + 98, z: 10 },
-            { x: tW + 12, y: tY + 60, z: 2 },
-          ],
-          color: 'rgba(15, 37, 62, 0.65)',
-          stroke: '#38BDF8',
-        }
-      );
-
-      // BRAÇO DIREITO
-      polys.push(
-        {
-          pts: [
-            { x: -tW - 2, y: tY + 8, z: 0 },
-            { x: -tW - 4, y: tY + 50, z: 0 },
-            { x: -tW - 20, y: tY + 55, z: 4 },
-            { x: -tW - 22, y: tY + 20, z: 4 },
-          ],
-          color: 'rgba(15, 37, 62, 0.7)',
-          stroke: '#38BDF8',
-        },
-        {
-          pts: [
-            { x: -tW - 12, y: tY + 60, z: 2 },
-            { x: -tW - 18, y: tY + 98, z: 10 },
-            { x: -tW - 28, y: tY + 95, z: 12 },
-            { x: -tW - 20, y: tY + 55, z: 4 },
-          ],
-          color: 'rgba(15, 37, 62, 0.65)',
-          stroke: '#38BDF8',
-        }
-      );
-
-      // PERNAS E BOTAS (Membros Inferiores com Juntas Articuladas)
-      const legW = 16;
-      // Perna Direita
-      polys.push(
-        {
-          pts: [
-            { x: -22, y: -25, z: 4 },
-            { x: -22 + legW, y: -25, z: 4 },
-            { x: -22 + legW, y: 55, z: 2 },
-            { x: -22, y: 55, z: 2 },
-          ],
-          color: 'rgba(15, 37, 62, 0.7)',
-          stroke: '#0099FF',
-        },
-        {
-          pts: [
-            { x: -23, y: 58, z: 2 },
-            { x: -23 + legW, y: 58, z: 2 },
-            { x: -23 + legW, y: 145, z: 0 },
-            { x: -23, y: 145, z: 0 },
-          ],
-          color: 'rgba(15, 37, 62, 0.65)',
-          stroke: '#0099FF',
-        },
-        // Bota Direita
-        {
-          pts: [
-            { x: -25, y: 145, z: 0 },
-            { x: -25 + legW + 4, y: 145, z: 0 },
-            { x: -25 + legW + 6, y: 165, z: 14 },
-            { x: -25, y: 165, z: 14 },
-          ],
-          color: 'rgba(2, 6, 23, 0.85)',
-          stroke: '#38BDF8',
-        }
-      );
-
-      // Perna Esquerda
-      polys.push(
-        {
-          pts: [
-            { x: 22 - legW, y: -25, z: 4 },
-            { x: 22, y: -25, z: 4 },
-            { x: 22, y: 55, z: 2 },
-            { x: 22 - legW, y: 55, z: 2 },
-          ],
-          color: 'rgba(15, 37, 62, 0.7)',
-          stroke: '#0099FF',
-        },
-        {
-          pts: [
-            { x: 23 - legW, y: 58, z: 2 },
-            { x: 23, y: 58, z: 2 },
-            { x: 23, y: 145, z: 0 },
-            { x: 23 - legW, y: 145, z: 0 },
-          ],
-          color: 'rgba(15, 37, 62, 0.65)',
-          stroke: '#0099FF',
-        },
-        // Bota Esquerda
-        {
-          pts: [
-            { x: 25 - legW - 4, y: 145, z: 0 },
-            { x: 25, y: 145, z: 0 },
-            { x: 25, y: 165, z: 14 },
-            { x: 25 - legW - 6, y: 165, z: 14 },
-          ],
-          color: 'rgba(2, 6, 23, 0.85)',
-          stroke: '#38BDF8',
-        }
-      );
-
-      // 3. Depth Sorting dos Polígonos (Painter's Algorithm)
-      const projectedPolys = polys.map((poly) => {
-        const projs = poly.pts.map(project);
-        const avgZ = projs.reduce((acc, p) => acc + p.sz, 0) / projs.length;
-        return { poly, projs, avgZ };
-      });
-
-      // Ordenar por profundidade (Z menor desenha primeiro, Z maior na frente)
-      projectedPolys.sort((a, b) => a.avgZ - b.avgZ);
-
-      // Desenhar Polígonos
-      projectedPolys.forEach(({ poly, projs }) => {
-        ctx.save();
-        ctx.fillStyle = poly.color;
-        ctx.strokeStyle = poly.stroke;
-        ctx.lineWidth = poly.isCuff ? 2.5 : 1.5;
-
-        if (poly.isCuff && isHipertenso) {
-          ctx.shadowColor = '#EF4444';
-          ctx.shadowBlur = 12;
-        } else if (poly.isVisor) {
-          ctx.shadowColor = '#0099FF';
-          ctx.shadowBlur = 8;
-        }
-
-        ctx.beginPath();
-        projs.forEach((p, idx) => {
-          if (idx === 0) ctx.moveTo(p.sx, p.sy);
-          else ctx.lineTo(p.sx, p.sy);
-        });
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // Se for o manguito, desenhar o display digital de pressão diretamente sobre a face 3D
-        if (poly.isCuff) {
-          const center = projs[0];
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 10px JetBrains Mono, monospace';
-          ctx.fillText(
-            `${pressaoArterial.sistolica}/${pressaoArterial.diastolica}`,
-            center.sx - 10,
-            center.sy + 8
-          );
-        }
-
-        ctx.restore();
-      });
-
-      // 4. Desenhar os 6 Nós Biométricos Holográficos Interativos
-      const nodesData = [
-        { zona: zonasCorporais[0], pos: { x: 0, y: -140, z: 28 }, label: 'CÓRTEX // HUD' },
-        { zona: zonasCorporais[1], pos: { x: -6, y: -80, z: 24 }, label: 'CORAÇÃO' },
-        { zona: zonasCorporais[2], pos: { x: tW + 20, y: cuffY + 2, z: 0 }, label: 'BRAÇO ESQ' },
-        { zona: zonasCorporais[3], pos: { x: 0, y: -90, z: -25 }, label: 'COLUNA' },
-        { zona: zonasCorporais[4], pos: { x: tW + 22, y: tY + 98, z: 10 }, label: 'MOTRICIDADE' },
-        { zona: zonasCorporais[5], pos: { x: 18, y: 80, z: 0 }, label: 'G-SUIT' },
-      ];
-
-      nodesData.forEach(({ zona, pos, label }) => {
-        if (!zona) return;
-        const p = project(pos);
-        const cor = getZoneColor(zona.nivelFadiga);
-        const isSelected = zonaSelecionadaId === zona.id;
-
-        ctx.save();
-        ctx.shadowColor = cor;
-        ctx.shadowBlur = isSelected ? 16 : 8;
-
-        // Anel pulsante
-        const pulseR = (isSelected ? 9 : 6) + Math.sin(t * 0.1) * 2;
-        ctx.strokeStyle = cor;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(p.sx, p.sy, pulseR * p.scale, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Ponto central
-        ctx.fillStyle = cor;
-        ctx.beginPath();
-        ctx.arc(p.sx, p.sy, 4 * p.scale, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Linha técnica de chamada com etiqueta
-        if (p.sz > -40) {
-          const tagX = p.sx + (pos.x >= 0 ? 35 : -35);
-          const tagY = p.sy - 15;
-
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-          ctx.beginPath();
-          ctx.moveTo(p.sx, p.sy);
-          ctx.lineTo(tagX, tagY);
-          ctx.lineTo(tagX + (pos.x >= 0 ? 40 : -40), tagY);
-          ctx.stroke();
-
-          ctx.fillStyle = isSelected ? '#FFFFFF' : '#38BDF8';
-          ctx.font = 'bold 9px JetBrains Mono, monospace';
-          ctx.textAlign = pos.x >= 0 ? 'left' : 'right';
-          ctx.fillText(`${label} [${zona.percentual}%]`, tagX + (pos.x >= 0 ? 4 : -4), tagY - 2);
-        }
-
-        ctx.restore();
-      });
-
-      // 5. Linha de Varredura Laser de Telemetria (Holo-Scan Beam)
-      const scanLaserY = cy + Math.sin(t * 0.05) * 160;
-      const laserGrad = ctx.createLinearGradient(0, scanLaserY, width, scanLaserY);
-      laserGrad.addColorStop(0, 'rgba(0, 153, 255, 0)');
-      laserGrad.addColorStop(0.5, modoRaioX ? 'rgba(0, 255, 255, 0.8)' : 'rgba(56, 189, 248, 0.8)');
-      laserGrad.addColorStop(1, 'rgba(0, 153, 255, 0)');
-
-      ctx.save();
-      ctx.strokeStyle = laserGrad;
-      ctx.lineWidth = 1.5;
-      ctx.shadowColor = '#0099FF';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.moveTo(30, scanLaserY);
-      ctx.lineTo(width - 30, scanLaserY);
-      ctx.stroke();
-      ctx.restore();
-
-      animationFrameId = requestAnimationFrame(render);
+      }
     };
 
-    render();
+    animate();
+
+    // Resize Observer
+    const handleResize = () => {
+      if (!container) return;
+      const newW = container.clientWidth || 440;
+      camera.aspect = newW / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(newW, height);
+      if (canvas2dRef.current) {
+        canvas2dRef.current.width = newW;
+        canvas2dRef.current.height = height;
+      }
+    };
+    window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', handleResize);
+      renderer.dispose();
+      holoMaterial.dispose();
+      cuffMaterial.dispose();
+      scene.clear();
     };
-  }, [rotacaoAngulo, fadigaScore, pressaoArterial, zonasCorporais, zonaSelecionadaId, modoRaioX, isHipertenso]);
+  }, [rotacaoAngulo, isHipertenso, modoRaioX, zonasCorporais, zonaSelecionadaId, hoveredNodeId, getZoneColor]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={420}
-      height={460}
-      className="w-full h-auto max-h-[460px] cursor-grab active:cursor-grabbing select-none"
-    />
+    <div
+      ref={mountRef}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className={`relative w-full max-w-[440px] h-[480px] flex items-center justify-center select-none overflow-hidden ${
+        hoveredNodeId ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+      }`}
+      title="Arraste para girar o corpo humano holográfico 360° ou clique nos nós biométricos"
+    >
+      {/* Canvas 2D Overlay para Linhas Técnicas de HUD e Textos dos Nós */}
+      <canvas
+        ref={canvas2dRef}
+        width={440}
+        height={480}
+        className="absolute inset-0 pointer-events-none z-10"
+      />
+    </div>
   );
 };
